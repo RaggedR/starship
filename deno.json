@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "con": "deno run --allow-read --allow-write src/cli/con.ts",
+    "demo": "deno run --allow-read --allow-write src/demo.ts",
+    "test": "deno test --allow-read --allow-write",
+    "check": "deno check src/**/*.ts"
+  },
+  "fmt": {
+    "lineWidth": 90,
+    "semiColons": true
+  },
+  "lint": {
+    "rules": { "tags": ["recommended"] }
+  }
+}

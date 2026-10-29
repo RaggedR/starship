@@ -1,0 +1,67 @@
+THE STARSHIP — what we are modelling, in plain English
+Version 0.1 — 2026-10-29
+
+Picture a single ship sitting in a small star system. The ship has a state —
+how much fuel is in the tanks, how much hull is left, where it is and which way
+it is pointing, how its limited power is split between shields and weapons and
+engines, and what is in the cargo hold. That state is the whole world. Nothing
+happens to it except through commands, and every command that changes it gets
+written into the ship's log along with the reason it was given.
+
+On the bridge sit five people, and the sharp part is that each one is allowed to
+touch only their own instruments.
+
+  - The science officer can look but not act. They can run a sensor sweep, read
+    the ship's status, check the manifest — and that is all. They cannot steer
+    or fire. Their job is to look out the window and say what they see.
+
+  - The helm officer can steer. They can burn fuel to change course and dock at
+    a station. They cannot fire the weapons. If they ask for a burn that needs
+    more fuel than the tanks hold, the ship simply refuses — the burn never
+    happens.
+
+  - The weapons officer can fire, and nothing else. They cannot move the ship.
+    And they cannot fire on their own say-so — firing needs the captain's
+    authorization first.
+
+  - The engineering officer manages resources. They shift power between shields,
+    weapons and engines, and move cargo. They cannot exceed the power budget, so
+    they cannot route more than the ship actually has.
+
+  - The captain gives no readings and flies nothing directly. The captain
+    delegates — asks the science officer for an assessment, asks the helm
+    officer for an escape course, gathers those answers into one picture of the
+    situation, and then decides and issues the orders, each with a stated
+    reason.
+
+Now a scene. A hazard appears. The captain tells science "tell me what is out
+there," and science reports back "a mine field two thousand kilometres off the
+port bow." The captain tells helm "plot me a burn that clears it," and helm
+reports "a burn along this vector, it will cost forty units of fuel, we have
+sixty." The captain weighs the two reports, decides to run, and orders the burn
+with the reason "evading the mine field reported off the port bow." The burn
+commits, the fuel drops, and the log records what was done and why. If instead
+helm had proposed a burn costing eighty units, the ship would have refused it,
+and from the captain's chair a refused burn and a broken engine look exactly the
+same — all you know is the ship did not move.
+
+And it scales up. A flagship captain commands a whole fleet, and delegates not
+to officers but to the captains of the other ships, each of whom runs their own
+bridge below. The flagship never sees inside another ship. It only hears each
+ship's status report come back up. A fleet is just ships nested inside a ship.
+
+----------------------------------------------------------------------
+
+The shape underneath. There is a world of state, a set of workers who may each
+touch only their own slice of it, a boss who gathers their reports and issues
+the orders that actually change things, a hard rule that quietly refuses
+anything illegal, and a permanent record of every change and the reason for it.
+The starship is the version that makes the delegation and the who-may-touch-what
+vivid. Its sibling, the treasury, is the version that makes the adding-up
+honest. See the sibling showpiece at https://github.com/RaggedR/treasury.
+
+The shape itself — a worker as a container morphism, the boss who gathers and
+decides, the gate that quietly refuses a denied command the same way a broken
+tool fails — is MacBeth's. It is set down in Note 5, "The toy harness is a
+worker" (~/git/harness/toy-harness-is-a-worker.pdf), which MacBeth sent in
+~/git/harness/2026-10-11-macbeth-reply-toy-harness-is-a-worker.txt.
