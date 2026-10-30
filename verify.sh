@@ -27,3 +27,17 @@ else
   echo "FAIL: replay is not deterministic." >&2
   exit 1
 fi
+
+echo "== determinism: two MAZE runs (scripted agent) must be byte-identical =="
+mazelogs() { cat maze-out/run/dungeon-log.jsonl maze-out/run/intent-log.jsonl; }
+
+# No --live here: the scripted BFS solver is deterministic and needs no API key.
+MOUT1="$(deno run --allow-read --allow-write --allow-net --allow-env src/maze-demo.ts)"; MA="$(mazelogs)"
+MOUT2="$(deno run --allow-read --allow-write --allow-net --allow-env src/maze-demo.ts)"; MB="$(mazelogs)"
+
+if [[ "$MOUT1" == "$MOUT2" && "$MA" == "$MB" ]]; then
+  echo "PASS: the maze agent's stdout and logs are byte-identical across two runs."
+else
+  echo "FAIL: maze replay is not deterministic." >&2
+  exit 1
+fi
