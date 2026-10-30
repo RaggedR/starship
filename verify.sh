@@ -41,3 +41,17 @@ else
   echo "FAIL: maze replay is not deterministic." >&2
   exit 1
 fi
+
+echo "== determinism: two FLEET runs (scout/fighter/captain) must be byte-identical =="
+fleetlogs() { cat demo-out/fleet/dungeon-log.jsonl demo-out/fleet/intent-log.jsonl \
+                  demo-out/fleet/trace.json demo-out/fleet/index.html; }
+
+FOUT1="$(deno run --allow-read --allow-write --allow-net --allow-env src/fleet-maze-demo.ts)"; FA="$(fleetlogs)"
+FOUT2="$(deno run --allow-read --allow-write --allow-net --allow-env src/fleet-maze-demo.ts)"; FB="$(fleetlogs)"
+
+if [[ "$FOUT1" == "$FOUT2" && "$FA" == "$FB" ]]; then
+  echo "PASS: the fleet's stdout, logs, trace, and generated site are byte-identical across two runs."
+else
+  echo "FAIL: fleet replay is not deterministic." >&2
+  exit 1
+fi

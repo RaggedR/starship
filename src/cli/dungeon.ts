@@ -13,7 +13,7 @@
 import { mazeMap, render } from "./format.ts";
 import type { Format } from "./format.ts";
 import { loadMaze, saveMaze } from "../maze/store.ts";
-import { applyEffect, heroStatus, look, RefError } from "../maze/world.ts";
+import { applyEffect, look, RefError, unitStatus } from "../maze/world.ts";
 import { attackGate, type GateResult, moveGate } from "../maze/gates.ts";
 import { fileShipLog, type ShipLogEntry } from "../log/shiplog.ts";
 import { type Clock, type IdSource, realClock, realIds } from "../log/ids.ts";
@@ -67,6 +67,9 @@ function run(argv: string[], ids: IdSource, clock: Clock): { value: unknown } {
   const worldPath = str(flags, "world") ?? "maze-state.json";
   const logPath = str(flags, "log") ?? "dungeon-log.jsonl";
   const world = loadMaze(worldPath);
+  // Which piece acts. Defaults to "hero" so the single-agent maze never passes it
+  // and is unchanged; the fleet passes --unit scout|fighter|captain.
+  const unitId = str(flags, "unit") ?? "hero";
 
   // Commit a gate result: refuse (nothing written) or apply + save + ship's-log.
   // The --reason is required by the caller but NOT written here — it belongs to
@@ -80,7 +83,7 @@ function run(argv: string[], ids: IdSource, clock: Clock): { value: unknown } {
     const entry: ShipLogEntry = {
       id: ids.next(),
       ts: clock.now(),
-      ship: "hero",
+      ship: unitId,
       command,
       effect: gate.effect,
       correlation_id: correlationId,
@@ -99,9 +102,9 @@ function run(argv: string[], ids: IdSource, clock: Clock): { value: unknown } {
   switch (group) {
     // ── reads (free) ──
     case "look":
-      return { value: look(world) };
+      return { value: look(world, unitId) };
     case "hero":
-      return { value: heroStatus(world) };
+      return { value: unitStatus(world, unitId) };
     case "map":
       return { value: mazeMap(world) };
     case "log": {
@@ -123,12 +126,12 @@ function run(argv: string[], ids: IdSource, clock: Clock): { value: unknown } {
     case "move": {
       const dir = str(flags, "dir");
       if (!dir) throw new Refusal("move needs --dir N|S|E|W");
-      return { value: commit("move", moveGate(world, dir)) };
+      return { value: commit("move", moveGate(world, unitId, dir)) };
     }
     case "attack": {
       const target = str(flags, "target");
       if (!target) throw new Refusal("attack needs --target <monster-id>");
-      return { value: commit("attack", attackGate(world, target)) };
+      return { value: commit("attack", attackGate(world, unitId, target)) };
     }
 
     default:

@@ -1,27 +1,31 @@
 // world_test.ts — the maze reducers are pure and total, and look reads the truth.
 
 import { assertEquals } from "jsr:@std/assert@1";
-import { applyEffect, dead, look, solved } from "./world.ts";
+import { applyEffect, atExit, isDead, look, unitById } from "./world.ts";
 import { seedMaze } from "./seed.ts";
+
+const heroPos = (w: ReturnType<typeof seedMaze>) => unitById(w, "hero")!.pos;
+const heroHp = (w: ReturnType<typeof seedMaze>) => unitById(w, "hero")!.hp;
 
 Deno.test("move reducer: relocates the hero, leaves the old world untouched", () => {
   const w0 = seedMaze();
-  const w1 = applyEffect(w0, { tag: "move", to: { x: 1, y: 0 }, dir: "E" });
-  assertEquals(w1.hero.pos, { x: 1, y: 0 });
-  assertEquals(w0.hero.pos, { x: 0, y: 0 }); // purity
+  const w1 = applyEffect(w0, { tag: "move", unitId: "hero", to: { x: 1, y: 0 }, dir: "E" });
+  assertEquals(heroPos(w1), { x: 1, y: 0 });
+  assertEquals(heroPos(w0), { x: 0, y: 0 }); // purity
 });
 
 Deno.test("attack reducer: a lethal blow removes the monster and spares the hero", () => {
   const w0 = seedMaze();
   const w1 = applyEffect(w0, {
     tag: "attack",
+    unitId: "hero",
     targetId: "goblin-1",
     monsterHpAfter: 0,
-    heroHpAfter: 20,
+    unitHpAfter: 20,
     lethal: true,
   });
   assertEquals(w1.monsters.some((m) => m.id === "goblin-1"), false);
-  assertEquals(w1.hero.hp, 20);
+  assertEquals(heroHp(w1), 20);
   assertEquals(w0.monsters.length, 2); // purity
 });
 
@@ -29,17 +33,18 @@ Deno.test("attack reducer: a survivor keeps its reduced hp and the hero takes da
   const w0 = seedMaze();
   const w1 = applyEffect(w0, {
     tag: "attack",
+    unitId: "hero",
     targetId: "orc-1",
     monsterHpAfter: 2,
-    heroHpAfter: 18,
+    unitHpAfter: 18,
     lethal: false,
   });
   assertEquals(w1.monsters.find((m) => m.id === "orc-1")?.hp, 2);
-  assertEquals(w1.hero.hp, 18);
+  assertEquals(heroHp(w1), 18);
 });
 
 Deno.test("look: reports the four neighbours and the exit bearing", () => {
-  const l = look(seedMaze()); // hero (0,0)
+  const l = look(seedMaze(), "hero"); // hero (0,0)
   assertEquals(l.onExit, false);
   assertEquals(l.exitBearing, "S");
   assertEquals(l.exitDistance, 2);
@@ -50,18 +55,24 @@ Deno.test("look: reports the four neighbours and the exit bearing", () => {
   assertEquals(byDir.W, "wall"); // off the grid
 });
 
-Deno.test("solved / dead predicates", () => {
-  const atExit = applyEffect(seedMaze(), { tag: "move", to: { x: 0, y: 2 }, dir: "S" });
-  assertEquals(solved(atExit), true);
-  assertEquals(solved(seedMaze()), false);
+Deno.test("atExit / isDead predicates", () => {
+  const arrived = applyEffect(seedMaze(), {
+    tag: "move",
+    unitId: "hero",
+    to: { x: 0, y: 2 },
+    dir: "S",
+  });
+  assertEquals(atExit(arrived, "hero"), true);
+  assertEquals(atExit(seedMaze(), "hero"), false);
 
   const slain = applyEffect(seedMaze(), {
     tag: "attack",
+    unitId: "hero",
     targetId: "orc-1",
     monsterHpAfter: 2,
-    heroHpAfter: 0,
+    unitHpAfter: 0,
     lethal: false,
   });
-  assertEquals(dead(slain), true);
-  assertEquals(dead(seedMaze()), false);
+  assertEquals(isDead(slain, "hero"), true);
+  assertEquals(isDead(seedMaze(), "hero"), false);
 });

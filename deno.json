@@ -4,6 +4,7 @@
     "dungeon": "deno run --allow-read --allow-write src/cli/dungeon.ts",
     "demo": "deno run --allow-read --allow-write src/demo.ts",
     "maze": "deno run --allow-read --allow-write --allow-net --allow-env src/maze-demo.ts",
+    "fleet": "deno run --allow-read --allow-write --allow-net --allow-env src/fleet-maze-demo.ts",
     "test": "deno test --allow-read --allow-write",
     "check": "deno check src/**/*.ts"
   },
