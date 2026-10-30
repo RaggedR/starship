@@ -21,9 +21,10 @@ Requires [Deno](https://deno.com) (2.x).
 deno task demo     # the star-system showpiece in one run (~1 min to read)
 deno task maze     # a real agent navigating a maze and fighting monsters
 deno task fleet    # three agents solve a maze by delegation + amalgamation (fog of war)
-deno task test     # 63 unit/contract tests
+deno task swarm    # five scouts, two fighters, and an LLM captain (allocation under fog)
+deno task test     # 82 unit/contract tests
 deno task check    # type-check — the typed gold plug compiling is the point
-./verify.sh        # check + test + prove all three demos replay byte-identically
+./verify.sh        # check + test + prove all four demos replay byte-identically
 ```
 
 Drive the CLI directly:
@@ -125,6 +126,78 @@ guardrail (the model only chooses among productive directions) means a free mode
 slow the solve but never wander it into failure: the live run tracked the scripted
 one almost exactly.
 
+## The swarm — an LLM captain commanding many agents
+
+The fleet has one scout, one fighter, and a *scripted* captain whose choices are
+forced: one scout to the nearest frontier, one fighter to the one blocking monster.
+Nothing is decided, so making that captain a model would be theatre. The **swarm**
+removes the forcing: **five scouts, two fighters, and an LLM captain** over a large
+branching maze, where the captain faces real **allocation under partial information**
+— which scout to send where, which fighter to which newly-found monster, and when to
+stop exploring and commit. The model sits at the **orchestration layer**, not the
+leaf. See [`swarm.pdf`](swarm.pdf) for the full writeup and
+[`PLAN-swarm.md`](PLAN-swarm.md) for the design.
+
+> **▶ Live replay:** <https://raggedr.github.io/starship/swarm/> — the agents start in
+> the centre; the maze forks into two large halves, each gated by a monster, with the
+> exit hidden behind one. The **LLM captain** (Groq `openai/gpt-oss-120b`), unable to
+> tell from fog which half holds the exit, sends **both fighters at once — one to each
+> gate** — then commits to the exit once it surfaces, its own reasoning shown in the
+> plan strip each step. It marches out having never seen ~41% of the maze. (A live
+> model run.)
+
+```bash
+deno task swarm                      # scripted greedy captain — no API key, deterministic
+open demo-out/swarm/index.html       # the generated replay website
+GROQ_API_KEY=... deno task swarm -- --live   # a free model IS the captain
+```
+
+- **N-ary amalgamation.** The captain folds **all five** scout reports into its fog
+  each planning step — `reports.reduce((fog, r) => mergeFog(fog, fogOf(r)), base)`.
+  Because `mergeFog` is a law-tested join (idempotent, commutative, associative), the
+  captain's map is identical regardless of the order the reports arrive — the N-ary
+  fold is well-defined *because* of those laws. The fleet merged one report at a time
+  and never exercised this; the swarm does, every tick (`src/swarm/amalgamate.ts`,
+  order-independence proven on real sightings).
+- **A tick scheduler, serialised for determinism.** A pool of eight agents is advanced
+  one tick at a time in a **fixed id order**, their gated CLI calls run **serially**
+  (never `Promise.all` over agents that mutate the shared world) — `tensorC` means "all
+  scout reports are owed," not "executed concurrently." Get that wrong and replay
+  diverges; it does not (`verify.sh` proves byte-identical).
+- **The LLM captain is an oracle behind a decoder — at the orchestration layer.** The
+  model may call four tools — `assign_scout`, `dispatch_fighter`, `march`, `hold` — and
+  **every order is decoded against the real fog**: a scout that is not idle, a target
+  cell that is not reachable known floor, a monster that is not known-alive, a march
+  with no safe route — each is a *refused position*, dropped, never an escape hatch. If
+  the model's whole plan is unproductive while real work remains, the **greedy plan
+  fills in** (anti-stall, not anti-idle: the model may still choose to leave a fighter
+  in reserve — that is prioritisation — it just cannot deadlock the swarm). A weak model
+  slows or mis-prioritises; it never breaks and never cheats.
+- **The fork forces the allocation.** A central start splits into two large halves,
+  each gated by a monster a few cells in; both gates sit at the same shallow depth, so
+  a scout meets each at about the same tick. Every reachable frontier then sits behind
+  one gate or the other, so the captain must dispatch **both fighters at once** — one
+  per gate — which is the "which fighter to which monster" decision. (The first maze
+  was a single corridor: its monsters surfaced one at a time, one fighter cleared them
+  all, and the second never moved. A linear corridor cannot force the decision.)
+- **Prioritisation is the point.** The exit hides behind only one gate, but from the
+  fog the two gates look identical — the monster is *why* the ground behind it is dark.
+  So the captain opens both, and the moment a monster-free route to the exit is known it
+  **commits and leaves every off-route monster alone** (the decoy half, and the monsters
+  deep in it). It reaches the exit having cleared **3 of 5** monsters with **~41% of the
+  maze still `unknown`** on its map.
+
+**Validated live** against Groq's `openai/gpt-oss-120b`: the LLM captain fanned the
+five scouts to different frontiers, then in a single planning step dispatched
+`fighter-1 → ogre-1` and `fighter-2 → ogre-2` — **both gates at once** — with its own
+reasons in the log (*"monster blocks potential route to exit"*). It cleared the two
+gates plus the one monster on the exit route, ignored the decoy monsters, and reached
+the exit in **136 ticks / 18 planning calls**, with **493 of 1189 cells never
+revealed** and reconciliation clean (**0 alarms**) over a **real** audit trail (true
+timestamps, not the fixed stand-ins — a live run must never be stamped with the demo
+clock). Every order it gave is bounded by the same decoder and reason-gate as the
+leaf: a hallucinated order is a refused position, never an escape hatch.
+
 ## What the demo shows
 
 1. A **star map** of the system — one ship, a minefield off the port bow.
@@ -151,7 +224,8 @@ one almost exactly.
 | `src/maze/` | the maze world: `types` (multi-unit), `world` (per-unit reducers + `look`), `gates` (move/attack smart constructors), `fog` (the `FogMap` semilattice + the merge/amalgamation), `seed` (single + `seedFleet`), `store` |
 | `src/agent/` | the single agent: `model` (the `ModelClient` seam + tool specs), `groq` (free OpenAI-compatible backend), `scripted` (deterministic BFS), `loop` (the five-part model loop) |
 | `src/fleet/` | the fleet: `ops` (registries + per-unit dispatch + fog pathing), `scout`/`fighter` (the two leaves, via `leafLocal`), `fleet-captain` (fog state + `seqC` round + march), `site` (the replay-website generator), `flagship` (the star-system nesting) |
-| `src/demo.ts`, `src/maze-demo.ts`, `src/fleet-maze-demo.ts`, `verify.sh` | the three end-to-end demos and their determinism checks |
+| `src/swarm/` | the swarm: `types` (the agent pool + states), `amalgamate` (the N-ary fog fold), `captain` (the `CaptainBrain` seam + scripted greedy plan), `model-captain` (the LLM captain: serialise · decode · fallback), `dispatch` (per-tick scout/fighter/captain hands), `scheduler` (the tick loop + event-gated planning), `site` (the replay website) |
+| `src/demo.ts`, `src/maze-demo.ts`, `src/fleet-maze-demo.ts`, `src/swarm-maze-demo.ts`, `verify.sh` | the four end-to-end demos and their determinism checks |
 
 ## Design anchors
 

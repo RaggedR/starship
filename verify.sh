@@ -55,3 +55,18 @@ else
   echo "FAIL: fleet replay is not deterministic." >&2
   exit 1
 fi
+
+echo "== determinism: two SWARM runs (5 scouts, 2 fighters, scripted captain) must be byte-identical =="
+swarmlogs() { cat demo-out/swarm/dungeon-log.jsonl demo-out/swarm/intent-log.jsonl \
+                  demo-out/swarm/trace.json demo-out/swarm/index.html demo-out/swarm/logs.html; }
+
+# No --live here: the scripted greedy captain is deterministic and needs no API key.
+WOUT1="$(deno run --allow-read --allow-write --allow-net --allow-env src/swarm-maze-demo.ts)"; WA="$(swarmlogs)"
+WOUT2="$(deno run --allow-read --allow-write --allow-net --allow-env src/swarm-maze-demo.ts)"; WB="$(swarmlogs)"
+
+if [[ "$WOUT1" == "$WOUT2" && "$WA" == "$WB" ]]; then
+  echo "PASS: the swarm's stdout, logs, trace, and generated site are byte-identical across two runs."
+else
+  echo "FAIL: swarm replay is not deterministic." >&2
+  exit 1
+fi
