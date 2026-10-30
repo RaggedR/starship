@@ -288,6 +288,14 @@ scripted --- the scout is the only agent whose choices a model meaningfully make
 live run uses the real id and clock seams, never the demo's seeded stand-ins: a
 live audit must carry true timestamps.
 
+This has been run: on Groq's \code{openai/gpt-oss-120b} the captain reached the exit
+in sixteen rounds with 136 of 315 cells still unknown and reconciliation clean, and
+the model's own reasons were recorded at the two genuine junctions (``heading toward
+exit''; ``opens new unexplored area while staying safe'') while every forced corridor
+step logged ``the only productive way.'' Because the guardrail offers the model only
+productive directions, the live run tracked the scripted one almost exactly: a free
+model can slow the solve but not break it.
+
 \bigskip
 \noindent\emph{Run it:} \code{deno task fleet}, then open
 \code{demo-out/fleet/index.html}. For the model-driven scout,

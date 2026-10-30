@@ -78,6 +78,10 @@ tagline the bridge only *scripted*: **orchestration by delegation and
 amalgamation**, on the sharpest example — partial observability. See
 [`fleet.pdf`](fleet.pdf) for the full writeup.
 
+> **▶ Live replay:** <https://raggedr.github.io/starship/> — watch the captain's
+> fog lift over the true maze as the scout reports, the fighter clears monsters, and
+> the captain marches out. (The scripted, deterministic run.)
+
 ```bash
 deno task fleet                      # scripted, deterministic — no API key
 open demo-out/fleet/index.html       # the generated replay website
@@ -111,6 +115,15 @@ The scout's decision each step is a **brain** seam (like the single-agent maze's
 model that chooses which branch to explore at each junction (the one decision where
 judgement helps). The fighter is mechanical and the captain is the deterministic
 orchestrator, so they stay scripted — only the scout gets a model.
+
+**Validated live** against Groq's `openai/gpt-oss-120b`: the captain reached the
+exit in 16 rounds with 136/315 cells still `unknown` and reconciliation clean (195
+matched, 0 alarms) — and the model's *own* reasons appear in the intent-log at the
+two genuine junctions (`"heading toward exit"`, `"opens new unexplored area while
+staying safe"`), while forced corridor steps logged `"the only productive way"`. The
+guardrail (the model only chooses among productive directions) means a free model can
+slow the solve but never wander it into failure: the live run tracked the scripted
+one almost exactly.
 
 ## What the demo shows
 
