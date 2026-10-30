@@ -75,7 +75,8 @@ deno task dungeon -- move --dir E --reason "head east toward the exit"
 
 The single-agent maze proves one agent in a real loop. The **fleet** proves the
 tagline the bridge only *scripted*: **orchestration by delegation and
-amalgamation**, on the sharpest example — partial observability.
+amalgamation**, on the sharpest example — partial observability. See
+[`fleet.pdf`](fleet.pdf) for the full writeup.
 
 ```bash
 deno task fleet                      # scripted, deterministic — no API key
