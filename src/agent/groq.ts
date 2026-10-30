@@ -108,19 +108,42 @@ function retryDelayMs(resp: Response, body: string, attempt: number): number {
   return Math.min(seconds + 0.5, 120) * 1000;
 }
 
-export function groqClient(): ModelClient {
-  const baseUrl = Deno.env.get("GROQ_BASE_URL") ?? "https://api.groq.com/openai/v1";
-  const model = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
-  const apiKey = Deno.env.get("GROQ_API_KEY");
+/** Everything a Groq client needs, passed explicitly so the SAME client runs in the
+ *  browser (where there is no Deno.env). groqClient() builds this from env for the Deno
+ *  demos; the browser builds it from the embedded key. */
+export type GroqConfig = {
+  readonly apiKey: string;
+  readonly baseUrl?: string;
+  readonly model?: string;
+  readonly reasoningEffort?: string;
+  readonly maxCompletionTokens?: number;
+};
+
+/** The ModelClient, parameterised — no ambient env read, so it bundles for the browser.
+ *  Uses only fetch/setTimeout/console, all of which exist in a page. */
+export function makeGroqClient(cfg: GroqConfig): ModelClient {
+  const baseUrl = cfg.baseUrl ?? "https://api.groq.com/openai/v1";
+  const model = cfg.model ?? "openai/gpt-oss-120b";
+  const apiKey = cfg.apiKey;
   const maxAttempts = 8;
+  // The free tier throttles on tokens-per-minute, and a reasoning model (gpt-oss)
+  // with no cap can spend thousands of thinking tokens per call — which, times a
+  // dozen-plus planning events, is what makes a --live run crawl. For a structured
+  // "allocate scouts and fighters" decision, low effort loses almost nothing and
+  // slashes the token-per-call cost, so each call fits the per-minute bucket and the
+  // run completes far faster. A hard completion cap bounds the worst case (if it ever
+  // truncates mid-plan, decode just yields an empty plan and greedy fills in).
+  const reasoningEffort = cfg.reasoningEffort ?? "low";
+  const maxCompletionTokens = cfg.maxCompletionTokens ?? 1024;
+  const supportsEffort = model.includes("gpt-oss");
 
   return {
     name: `groq:${model}`,
     async converse(system, messages, tools): Promise<Turn> {
       if (!apiKey) {
         throw new Error(
-          "GROQ_API_KEY is not set. Get a free key at https://console.groq.com and " +
-            "`export GROQ_API_KEY=...` before a --live run.",
+          "No Groq API key provided. For the Deno demos export GROQ_API_KEY (a free key " +
+            "from https://console.groq.com) before a --live run.",
         );
       }
       const payload = JSON.stringify({
@@ -129,6 +152,8 @@ export function groqClient(): ModelClient {
         tools: toOpenAITools(tools),
         tool_choice: "auto",
         temperature: 0,
+        max_completion_tokens: maxCompletionTokens,
+        ...(supportsEffort ? { reasoning_effort: reasoningEffort } : {}),
       });
 
       for (let attempt = 1;; attempt++) {
@@ -164,4 +189,18 @@ export function groqClient(): ModelClient {
       }
     },
   };
+}
+
+/** The env-driven client for the Deno demos (--live). Reads the key and the overridable
+ *  knobs from the environment and delegates to makeGroqClient. The browser never calls
+ *  this (it has no Deno.env); it calls makeGroqClient with the embedded key directly. */
+export function groqClient(): ModelClient {
+  const maxTok = Deno.env.get("GROQ_MAX_COMPLETION_TOKENS");
+  return makeGroqClient({
+    apiKey: Deno.env.get("GROQ_API_KEY") ?? "",
+    baseUrl: Deno.env.get("GROQ_BASE_URL") ?? undefined,
+    model: Deno.env.get("GROQ_MODEL") ?? undefined,
+    reasoningEffort: Deno.env.get("GROQ_REASONING_EFFORT") ?? undefined,
+    maxCompletionTokens: maxTok ? Number(maxTok) : undefined,
+  });
 }

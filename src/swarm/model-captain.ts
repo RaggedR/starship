@@ -50,7 +50,7 @@ function reasoningOf(prose: string, orders: readonly CaptainOrder[]): string {
   return (head ? head + " · " : "") + parts.join(" · ");
 }
 
-const SYSTEM =
+export const SYSTEM =
   "You are the CAPTAIN of a swarm exploring a grid maze to reach the EXIT. You are " +
   "BLIND: you see only the fog your scouts have revealed, never the true maze. You " +
   "command FIVE scouts (your eyes — they map, they cannot fight) and TWO fighters " +
@@ -59,7 +59,10 @@ const SYSTEM =
   "• assign_scout: send an idle scout to a frontier cell (a '?' on the map) to reveal " +
   "new ground. Spread scouts to DIFFERENT regions so they fan out.\n" +
   "• dispatch_fighter: the MOMENT a scout is blocked and holding a monster (marked " +
-  "'guarded' below), send a fighter — do not wait for more to be found. Your idle " +
+  "'guarded' below), send a fighter — do not wait for more to be found. When two " +
+  "monsters block in DIFFERENT directions, send your two fighters to OPPOSITE sides — " +
+  "one each — so both regions open at once and your scouts can explore the maze in " +
+  "both directions. Never send both fighters the same way. Your idle " +
   "fighters automatically trail just behind the scouts, so one is always near; the " +
   "nearest will reach it fast. Monsters on dead-end branches lead nowhere — once you " +
   "have a route to the exit, leave the rest alone. You have only two fighters.\n" +
@@ -137,7 +140,7 @@ function renderFog(st: CaptainState): string {
   return rows.join("\n");
 }
 
-function renderState(st: CaptainState): string {
+export function renderState(st: CaptainState): string {
   const idleScouts = st.agents.filter((a) => a.kind === "scout" && a.state === "idle");
   const busyScouts = st.agents.filter((a) => a.kind === "scout" && a.state !== "idle");
   const idleFighters = st.agents.filter((a) => a.kind === "fighter" && a.state === "idle");

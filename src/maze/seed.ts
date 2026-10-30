@@ -82,20 +82,33 @@ export function seedFleet(): MazeWorld {
 
 // ── the swarm maze ─────────────────────────────────────────────────────────
 // The fleet grown to a world with something to DECIDE, and shaped so the decision is
-// about ALLOCATING TWO FIGHTERS rather than feeding one. A DETERMINISTIC perfect maze
-// (20×14 cells → 41×29 grid) carved by scratchpad/genmaze-swarm2.ts, rooted at the
-// CENTRE: the agents start in the middle and the maze splits there into two large
-// halves — one holding the exit, one a decoy. The captain cannot tell from fog which
-// half holds the exit, so it must open BOTH — and that is the point.
+// about ALLOCATING TWO FIGHTERS rather than feeding one. A DETERMINISTIC maze (25×17
+// cells → 51×35 grid, ~1.5× the first swarm maze) carved by
+// scratchpad/genmaze-swarm-lobes.ts, rooted at the CENTRE: the agents start in the
+// middle flanked by two gate monsters, and the maze splits there into two halves — one
+// holding the exit, one a decoy. The two halves are DIFFERENT mazes, carved from two
+// seeded PRNGs (organic/random-looking, NOT a tiled arithmetic pattern and NOT mirror
+// images), so each is its own thing to explore; but under fog they are indistinguishable
+// — all the captain sees is two identical gates — so it cannot tell which half holds the
+// exit, and must open BOTH. That is the point.
 //
-// Agents (all STACKED at the centre (21,15) — friendly units may share a cell, see
-// moveGate): FIVE scouts (speed 5) fan out in several directions at once; TWO fighters
-// (speed 1) the captain must ALLOCATE; the captain (speed 1) marches itself out on
-// borrowed perception.
+// The story is guaranteed by construction, not discovered: the two gates sit one cell
+// out of the start on IDENTICAL necks, so they are equidistant and found on the SAME tick
+// (⟹ both fighters dispatched at once); and because the whole maze is a tree, each gate
+// seals its ENTIRE lobe (no way around), so clearing both is necessary, not optional.
+// Size note: this is deliberately NOT 10× bigger — with one replay frame per scout
+// footstep, a 10× maze is either a near-empty black void (fog never lifts) or a ~17 MB,
+// 20k-frame page; ~1.5× is the largest that reveals-to-~half in a watchable ~2k frames.
+//
+// Agents (all STACKED at the centre (25,17) — friendly units may share a cell, see
+// moveGate): FIVE scouts (speed 5) fan out across the two lobes once the gates fall;
+// TWO fighters (speed 1) the captain must ALLOCATE; the captain (speed 1) marches itself
+// out on borrowed perception. The scripted solve reaches the exit with ~41% of the maze
+// still unrevealed — the fog-of-war claim (matching the original's feel at a larger scale).
 //
 // Monsters — FIVE, and the captain is told only geometry, never which half wins:
-//   • TWO GATE monsters (ogre-1, ogre-2), one a few cells into each half, discovered
-//     at the same depth. Every reachable frontier sits behind one or the other, so the
+//   • TWO GATE monsters (ogre-1, ogre-2), one at the mouth of each half, discovered at
+//     the same depth. Every reachable frontier sits behind one or the other, so the
 //     captain dispatches BOTH fighters at once — fighter-1 to one gate, fighter-2 to
 //     the other. This concurrent dispatch is the "which fighter to which monster"
 //     decision the swarm exists to show; the first maze's single corridor never forced
@@ -108,61 +121,63 @@ export function seedFleet(): MazeWorld {
 // two and strikes back once — so a cleared gate actually costs a fighter some hp.
 
 export function seedSwarm(): MazeWorld {
-  const c = { x: 21, y: 15 }; // the central start — the fork into the two halves
   return {
-    width: 41,
-    height: 29,
+    width: 51,
+    height: 35,
     walls: [
-      "#########################################",
-      "#.....#.......#.......#.......#.......#.#",
-      "#####.#.#####.#.#####.#.#####.#.#####.#.#",
-      "#...#...#...#...#...#...#...#...#...#...#",
-      "#.#######.#######.#######.#######.#####.#",
-      "#...#...........#...#...........#...#...#",
-      "#.#.#.#####.###.#.#.#.#####.###.#.#.#.###",
-      "#.#...#.#...#...#.#...#.#...#...#.#...#.#",
-      "#.#####.#.#######.#####.#.#######.#####.#",
-      "#.....#.#.......#.....#.#.......#.....#.#",
-      "#####.#.#######.#####.#.#######.#####.#.#",
-      "#...#.......#.......#.......#.......#...#",
-      "#.#######.###.#.#########.###.#.#######.#",
-      "#...#.....#...#.#...#.....#...#.#...#...#",
-      "#.#.#.#####.###.#.#.#.#####.###.#.#.#.###",
-      "#.#...#.#...#...#.#...#.#...#...#.#...#.#",
-      "#.#####.#.#######.#####.#.#######.#####.#",
-      "#.....#.#.......#.....#.#.......#.....#.#",
-      "#####.#.#######.#####.#.#######.#####.#.#",
-      "#...#.......#.......#.......#.......#...#",
-      "#.#######.###.#.#########.###.#.#######.#",
-      "#...#.....#...#.#...#.....#...#.#...#...#",
-      "#.#.#.#####.###.#.#.#.#####.###.#.#.#.###",
-      "#.#.....#...#...#.#.....#...#...#.#...#.#",
-      "#.#######.#.#####.#######.#.#####.#####.#",
-      "#.....#...#.#...#.....#...#.#...#.....#.#",
-      "#####.#.#####.#.#####.#.#####.#.#####.#.#",
-      "#.....#.......#.......#.......#.........#",
-      "#########################################",
+      "###################################################",
+      "#.............#.........###.....#.........#.......#",
+      "#.#########.#.###.#####.###.#####.###.###.#######.#",
+      "#.....#.....#.....#.#...###.#.....#...#.#.........#",
+      "#####.#.###########.#.#####.#.#####.###.#########.#",
+      "#...#.#...#.#.........#.###.....#...#.........#...#",
+      "###.#.###.#.#.#####.###.#######.#.###.#####.#.#.###",
+      "#...#.#...#...#...#.....###...#.#...#.#.....#.#...#",
+      "#.###.#.#######.#.#####.###.#.###.#.###.#####.###.#",
+      "#.....#.........#...#...###.#...#.#...#...#.#...#.#",
+      "#############.#####.#######.###.###.#.###.#.#.###.#",
+      "#...#.......#...#...#...###.#.....#.#...#.#...#...#",
+      "#.#.#.#####.#####.#.#.#.###.#####.#####.#.#.###.###",
+      "#.#.#...#.#.....#.#.#.#.###.....#...#...#.#.#...#.#",
+      "#.#.###.#.#####.#.#.#.#.#######.###.#.###.###.###.#",
+      "#.#.....#.....#...#.#.#.###.....#.#.#...#.........#",
+      "#.###########.#####.#.#.###.#####.#.###.#.#########",
+      "#.....#.......#.....#.#.....#...#...#...#.#.......#",
+      "#.###.#.#####.#.#####.#######.#.#.###.###.#.#####.#",
+      "#.#.#.#.#.....#.#...#...###...#.#.#...#...#.....#.#",
+      "#.#.#.#.#.#####.#.#####.###.###.#.#.#######.#####.#",
+      "#...#.#.#...#...#...#...###.#...#.#.........#...#.#",
+      "#####.#.###.#.#####.#.#####.#####.#.#########.#.#.#",
+      "#...#.#.#...#.......#.#.###.#.....#.........#.#.#.#",
+      "#.#.#.#.###########.#.#.###.#.#############.#.#.#.#",
+      "#.#...#.#...........#.#.###.#...#.....#.....#.#...#",
+      "#.#####.#.###########.#.###.###.###.#.#######.###.#",
+      "#.#.....#.#.........#...###.#...#...#.........#.#.#",
+      "#.###.#.#.#.#######.###.###.#.###.#############.#.#",
+      "#...#.#...#.#.....#.#...###.#.#...#.............#.#",
+      "#.#.#######.#.#.###.#.#####.#.#.###.#####.#######.#",
+      "#.#.#.....#...#.#...#.#.###.#...#.....#...#.....#.#",
+      "#.#.#.###.#####.#.###.#.###.#####.###.#####.###.#.#",
+      "#.#.....#.......#.......###.........#.........#...#",
+      "###################################################",
     ],
     units: [
-      { id: "scout-1", pos: c, hp: 10, atk: 1, speed: 5 },
-      { id: "scout-2", pos: c, hp: 10, atk: 1, speed: 5 },
-      { id: "scout-3", pos: c, hp: 10, atk: 1, speed: 5 },
-      { id: "scout-4", pos: c, hp: 10, atk: 1, speed: 5 },
-      { id: "scout-5", pos: c, hp: 10, atk: 1, speed: 5 },
-      { id: "fighter-1", pos: c, hp: 20, atk: 3, speed: 1 },
-      { id: "fighter-2", pos: c, hp: 20, atk: 3, speed: 1 },
-      { id: "captain", pos: c, hp: 10, atk: 0, speed: 1 },
+      { id: "scout-1", pos: { x: 25, y: 17 }, hp: 10, atk: 1, speed: 5 },
+      { id: "scout-2", pos: { x: 25, y: 17 }, hp: 10, atk: 1, speed: 5 },
+      { id: "scout-3", pos: { x: 25, y: 17 }, hp: 10, atk: 1, speed: 5 },
+      { id: "scout-4", pos: { x: 25, y: 17 }, hp: 10, atk: 1, speed: 5 },
+      { id: "scout-5", pos: { x: 25, y: 17 }, hp: 10, atk: 1, speed: 5 },
+      { id: "fighter-1", pos: { x: 25, y: 17 }, hp: 20, atk: 3, speed: 1 },
+      { id: "fighter-2", pos: { x: 25, y: 17 }, hp: 20, atk: 3, speed: 1 },
+      { id: "captain", pos: { x: 25, y: 17 }, hp: 10, atk: 0, speed: 1 },
     ],
     monsters: [
-      // the two GATE monsters — one into each half, discovered together
-      { id: "ogre-1", pos: { x: 25, y: 13 }, hp: 5, atk: 2 }, // exit-half gate
-      { id: "ogre-2", pos: { x: 17, y: 13 }, hp: 5, atk: 2 }, // decoy-half gate
-      // sequential work on the exit route, past ogre-1
-      { id: "orc-1", pos: { x: 24, y: 5 }, hp: 5, atk: 2 },
-      // deep in the decoy half — ignorable once the exit is found
-      { id: "goblin-1", pos: { x: 1, y: 27 }, hp: 3, atk: 1 },
-      { id: "goblin-2", pos: { x: 3, y: 19 }, hp: 3, atk: 1 },
+      { id: "ogre-1", pos: { x: 27, y: 17 }, hp: 5, atk: 2 }, // exit-half gate
+      { id: "ogre-2", pos: { x: 23, y: 17 }, hp: 5, atk: 2 }, // decoy-half gate
+      { id: "orc-1", pos: { x: 29, y: 25 }, hp: 5, atk: 2 }, // exit route, past ogre-1
+      { id: "goblin-1", pos: { x: 9, y: 23 }, hp: 3, atk: 1 }, // deep in decoy
+      { id: "goblin-2", pos: { x: 11, y: 5 }, hp: 3, atk: 1 }, // deep in decoy
     ],
-    exit: { x: 29, y: 7 },
+    exit: { x: 35, y: 25 },
   };
 }

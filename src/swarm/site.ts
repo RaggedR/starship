@@ -42,10 +42,45 @@ export type SwarmTrace = {
 };
 
 export function buildSwarmSite(trace: SwarmTrace, outPath: string): void {
-  Deno.writeTextFileSync(outPath, page(JSON.stringify(trace)));
+  Deno.writeTextFileSync(outPath, page(JSON.stringify(trace), loadAppBundle(), loadLlmConfig()));
 }
 
-function page(traceJson: string): string {
+/** The embedded LLM config for the in-browser live captain. Read from the environment
+ *  at BUILD time and inlined into the generated page only — never written to any source
+ *  file or committed, so the key stays out of git history (it becomes public only when
+ *  the page is deployed, which is the owner's explicit choice). If GROQ_API_KEY is not
+ *  in the environment at generation time (e.g. a scripted `deno task swarm` with no key,
+ *  as verify.sh runs), nothing is injected and the live button disables itself. */
+function loadLlmConfig(): string {
+  const key = Deno.env.get("GROQ_API_KEY");
+  if (!key) return "";
+  const cfg = {
+    key,
+    model: Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b",
+    baseUrl: Deno.env.get("GROQ_BASE_URL") ?? "https://api.groq.com/openai/v1",
+  };
+  return `window.__SWARM_LLM__ = ${JSON.stringify(cfg)};`;
+}
+
+/** The browser bundle for the "🎲 New random maze" button (web/app.js, built by
+ *  `deno bundle --platform browser --format iife web/app.ts -o web/app.js`), inlined so
+ *  the page stays a SELF-CONTAINED single file — works over file://, on GitHub Pages,
+ *  or as an artifact, with no sibling script and no network. Best-effort: if the bundle
+ *  has not been built yet the page still renders the featured replay and the button
+ *  disables itself (the renderer checks for runNewMaze). Deterministic for verify.sh:
+ *  two runs read the same committed bytes. */
+function loadAppBundle(): string {
+  try {
+    const js = Deno.readTextFileSync(new URL("../../web/app.js", import.meta.url));
+    // Guard the one HTML hazard of inlining a script: a literal </script> would close
+    // the tag early. The bundle never emits that token, but escape it defensively.
+    return js.replaceAll("</script>", "<\\/script>");
+  } catch {
+    return "";
+  }
+}
+
+function page(traceJson: string, appJs: string, llmCfg: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -69,7 +104,7 @@ function page(traceJson: string): string {
   .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
   .wrap { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
   .board { background: var(--panel); padding: 12px; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
-  canvas { display: block; image-rendering: pixelated; border-radius: 4px; }
+  canvas { display: block; image-rendering: pixelated; border-radius: 4px; max-width: 100%; height: auto; }
   .side { width: 360px; background: var(--panel); padding: 16px; border-radius: 10px; }
   .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
   button {
@@ -103,6 +138,7 @@ function page(traceJson: string): string {
 <body>
   <h1>Swarm maze — an LLM captain commands the fog</h1>
   <div class="sub">Five scouts map · the captain decides who goes where and which monster to clear · two fighters obey · the captain marches out on what it was told</div>
+  <div class="sub"><a href="../" style="color:var(--accent);font-weight:600;text-decoration:none">← back to the fleet</a></div>
   <div class="wrap">
     <div class="board"><canvas id="c"></canvas></div>
     <div class="side">
@@ -114,6 +150,11 @@ function page(traceJson: string): string {
         <button id="next">step ›</button>
         <button id="restart">⟲</button>
       </div>
+      <div class="row">
+        <button id="newmaze" title="Generate a brand-new random maze and solve it with the scripted captain, entirely in your browser">🎲 New random maze</button>
+        <button id="newmazelive" title="Generate a random maze and watch the real LLM captain solve it live — calls Groq from your browser">🧠 Live LLM run</button>
+      </div>
+      <div class="row"><span class="k" id="genstatus">&nbsp;</span></div>
       <div class="row"><input type="range" id="scrub" min="0" value="0" /></div>
       <div class="row"><span class="k">speed</span><input type="range" id="speed" min="1" max="160" value="70" /></div>
       <div class="row"><span class="actor a--" id="actor">—</span><span id="what" class="k"></span></div>
@@ -138,17 +179,15 @@ function page(traceJson: string): string {
   </div>
 
 <script id="trace" type="application/json">${traceJson}</script>
+<script>${llmCfg}</script>
+<script>${appJs}</script>
 <script>
-const TRACE = JSON.parse(document.getElementById('trace').textContent);
-const M = TRACE.maze, F = TRACE.frames, S = TRACE.summary;
-const CELL = 20, W = M.width, H = M.height;
-const cv = document.getElementById('c'); cv.width = W*CELL; cv.height = H*CELL;
+// Trace state is MUTABLE: the featured pre-recorded run loads first, and the
+// "🎲 New random maze" button swaps in a freshly-solved trace via init(trace).
+let TRACE, M, F, S, FOG, W, H;
+const CELL = 16;
+const cv = document.getElementById('c');
 const g = cv.getContext('2d');
-document.getElementById('brain').textContent = 'captain: ' + S.captain;
-
-// resolve the carry-forward fog deltas once: a frame with fog===null reuses the
-// last non-null fog before it.
-const FOG = []; { let cur = null; for (const f of F){ if (f.fog) cur = f.fog; FOG.push(cur); } }
 
 const COL = { scout:'#4cc9f0', fighter:'#f0526b', captain:'#ffd166', monster:'#b36bff',
   exit:'#39d98a', wall:'#0d1017', floor:'#28324a', veil:'rgba(7,9,14,0.86)' };
@@ -231,18 +270,100 @@ function draw(idx){
 }
 
 let idx = 0, playing = false, timer = null;
-const scrub = document.getElementById('scrub'); scrub.max = F.length-1;
+const scrub = document.getElementById('scrub');
 const speed = document.getElementById('speed');
+const playBtn = document.getElementById('play');
+const newBtn = document.getElementById('newmaze');
+const liveBtn = document.getElementById('newmazelive');
+const genStatus = document.getElementById('genstatus');
 function show(i){ idx = Math.max(0, Math.min(F.length-1, i)); draw(idx); }
 function tick(){ if(!playing) return; if(idx>=F.length-1){ stop(); return; } show(idx+1); timer = setTimeout(tick, 1000/ +speed.value); }
-function play(){ if(idx>=F.length-1) idx=0; playing=true; document.getElementById('play').textContent='Pause'; tick(); }
-function stop(){ playing=false; document.getElementById('play').textContent='Play'; if(timer) clearTimeout(timer); }
-document.getElementById('play').onclick = ()=> playing?stop():play();
+function play(){ if(idx>=F.length-1) idx=0; playing=true; playBtn.textContent='Pause'; tick(); }
+function stop(){ playing=false; playBtn.textContent='Play'; if(timer) clearTimeout(timer); }
+
+// (Re)bind the renderer to a trace — the featured run at load, or a freshly-solved
+// random maze when the button is clicked. Maze size is fixed, but we re-set the canvas
+// anyway so a future variable size would still work.
+function init(trace){
+  stop();
+  TRACE = trace; M = trace.maze; F = trace.frames; S = trace.summary;
+  W = M.width; H = M.height;
+  cv.width = W*CELL; cv.height = H*CELL;
+  document.getElementById('brain').textContent = 'captain: ' + S.captain;
+  // resolve the carry-forward fog deltas once: a frame with fog===null reuses the last.
+  FOG = []; { let cur = null; for (const f of F){ if (f.fog) cur = f.fog; FOG.push(cur); } }
+  scrub.max = F.length-1; scrub.value = 0;
+  idx = 0; show(0);
+}
+
+playBtn.onclick = ()=> playing?stop():play();
 document.getElementById('next').onclick = ()=>{ stop(); show(idx+1); };
 document.getElementById('prev').onclick = ()=>{ stop(); show(idx-1); };
 document.getElementById('restart').onclick = ()=>{ stop(); show(0); };
 scrub.oninput = ()=>{ stop(); show(+scrub.value); };
-show(0);
+
+// The button needs the inlined solver (globalThis.runNewMaze). If the bundle wasn't
+// built/inlined, degrade gracefully: disable it rather than throwing on click.
+if (typeof globalThis.runNewMaze !== 'function'){
+  newBtn.disabled = true;
+  newBtn.title = 'the in-browser solver bundle (web/app.js) is not present on this page';
+} else {
+  newBtn.onclick = async ()=>{
+    stop();
+    newBtn.disabled = true;
+    const label = newBtn.textContent; newBtn.textContent = 'solving…'; genStatus.textContent = '';
+    // a fresh 32-bit seed per click; one click-seed drives both lobes (app.ts).
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0] >>> 0;
+    try {
+      const t0 = performance.now();
+      const trace = await globalThis.runNewMaze(seed);
+      const ms = Math.round(performance.now()-t0);
+      init(trace);
+      genStatus.textContent = 'seed '+seed+' · '+trace.summary.ticks+' ticks · '+trace.summary.unknownAtEnd+' cells dark · '+ms+'ms';
+      play();
+    } catch (e){
+      console.error(e);
+      genStatus.textContent = 'generation failed — see console';
+    } finally {
+      newBtn.disabled = false; newBtn.textContent = label;
+    }
+  };
+}
+
+// The live button runs the REAL LLM captain in your browser (calls Groq with the
+// embedded key). Only enabled if a key was embedded (liveAvailable). A live run is a
+// dozen+ sequential model calls, so it can take ~10s on a fresh token bucket or longer
+// with rate-limit backoff — we disable the controls and show per-step progress.
+if (typeof globalThis.liveAvailable !== 'function' || !globalThis.liveAvailable()){
+  liveBtn.disabled = true;
+  liveBtn.title = 'no Groq key is embedded on this page, so the live LLM run is unavailable';
+} else {
+  liveBtn.onclick = async ()=>{
+    stop();
+    newBtn.disabled = true; liveBtn.disabled = true;
+    const label = liveBtn.textContent; liveBtn.textContent = 'thinking…';
+    genStatus.textContent = 'the LLM captain is planning…';
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0] >>> 0;
+    try {
+      const t0 = performance.now();
+      const trace = await globalThis.runNewMazeLive(seed, (step)=>{
+        genStatus.textContent = 'the LLM captain is planning… (step '+step+')';
+      });
+      const s = Math.round((performance.now()-t0)/100)/10;
+      init(trace);
+      genStatus.textContent = trace.summary.captain+' · seed '+seed+' · '+trace.summary.ticks+' ticks · '+trace.summary.unknownAtEnd+' cells dark · '+s+'s';
+      play();
+    } catch (e){
+      console.error(e);
+      genStatus.textContent = 'live run failed — '+(e && e.message ? e.message : 'see console')+' (the free tier may be rate-limited; try again shortly)';
+    } finally {
+      newBtn.disabled = false; liveBtn.disabled = false; liveBtn.textContent = label;
+    }
+  };
+}
+
+// first load: the featured pre-recorded run embedded in the page (the --live model run).
+init(JSON.parse(document.getElementById('trace').textContent));
 </script>
 </body>
 </html>

@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "== deno check =="
-deno check src/**/*.ts
+deno check src/**/*.ts web/**/*.ts
 
 echo "== deno test =="
 deno test --allow-read --allow-write

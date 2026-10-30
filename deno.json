@@ -7,7 +7,8 @@
     "fleet": "deno run --allow-read --allow-write --allow-net --allow-env src/fleet-maze-demo.ts",
     "swarm": "deno run --allow-read --allow-write --allow-net --allow-env src/swarm-maze-demo.ts",
     "test": "deno test --allow-read --allow-write",
-    "check": "deno check src/**/*.ts"
+    "check": "deno check src/**/*.ts web/**/*.ts",
+    "bundle": "deno bundle --platform browser --format iife web/app.ts -o web/app.js"
   },
   "fmt": {
     "lineWidth": 90,
