@@ -21,7 +21,7 @@ import {
   type Registry,
   runMutation,
 } from "../bridge/harness.ts";
-import { dead, solved } from "../maze/world.ts";
+import { atExit, isDead, unitById } from "../maze/world.ts";
 import { loadMaze } from "../maze/store.ts";
 
 /** The adventurer's registry: the allowlist IS the permission grant (no bash, no
@@ -159,7 +159,7 @@ export async function runMaze(params: {
 
   while (true) {
     const world = loadMaze(worldPath);
-    if (solved(world) || dead(world)) break;
+    if (atExit(world, "hero") || isDead(world, "hero")) break;
     if (steps >= maxSteps || turns >= maxTurns) break;
 
     const turn = await client.converse(SYSTEM_PROMPT, messages, ADVENTURER_TOOLS);
@@ -187,10 +187,10 @@ export async function runMaze(params: {
 
   const finalWorld = loadMaze(worldPath);
   return {
-    solved: solved(finalWorld),
-    dead: dead(finalWorld),
+    solved: atExit(finalWorld, "hero"),
+    dead: isDead(finalWorld, "hero"),
     steps,
     turns,
-    heroHp: finalWorld.hero.hp,
+    heroHp: unitById(finalWorld, "hero")?.hp ?? 0,
   };
 }

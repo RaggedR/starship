@@ -5,6 +5,7 @@
 
 import type { World } from "../world/types.ts";
 import type { MazeWorld } from "../maze/types.ts";
+import type { FogMap, Known } from "../maze/fog.ts";
 
 export type Format = "json" | "table";
 
@@ -98,12 +99,21 @@ export function starMap(world: World, width = 56, height = 19): string {
 }
 
 // ── ASCII maze map ────────────────────────────────────────────────────
+/** The glyph for a unit: the hero is '@'; every other unit is its id's uppercase
+ *  initial (scout 'S', fighter 'F', captain 'C'). Kept here so the maze map and the
+ *  fog map draw units the same way. */
+export function unitGlyph(id: string): string {
+  return id === "hero" ? "@" : id[0].toUpperCase();
+}
+
 /** A plain-ASCII map of the maze, drawn cell-for-cell (the maze IS a grid, so no
- *  projection is needed — contrast starMap). '#' wall, '@' hero, uppercase initial
- *  a monster, 'X' the exit, '.' floor. Row 0 is the top. Deterministic. */
+ *  projection is needed — contrast starMap). '#' wall, a unit by its glyph,
+ *  uppercase initial a monster, 'X' the exit, '.' floor. A unit standing on the
+ *  exit draws as the unit (it has arrived). Row 0 is the top. Deterministic. */
 export function mazeMap(world: MazeWorld): string {
   const glyphAt = (x: number, y: number): string => {
-    if (world.hero.pos.x === x && world.hero.pos.y === y) return "@";
+    const u = world.units.find((uu) => uu.pos.x === x && uu.pos.y === y);
+    if (u) return unitGlyph(u.id);
     const m = world.monsters.find((mm) => mm.pos.x === x && mm.pos.y === y);
     if (m) return m.id[0].toUpperCase();
     if (world.exit.x === x && world.exit.y === y) return "X";
@@ -117,13 +127,61 @@ export function mazeMap(world: MazeWorld): string {
   }
   const top = "+" + "-".repeat(world.width) + "+";
   const body = rows.map((r) => "|" + r + "|").join("\n");
+  const units = world.units
+    .map((u) =>
+      `  ${unitGlyph(u.id)}  ${u.id}  hp ${u.hp}  (${u.pos.x}, ${u.pos.y})`
+    )
+    .join("\n");
   const monsters = world.monsters.length === 0 ? "  (no monsters left)" : world.monsters
     .map((m) =>
       `  ${m.id[0].toUpperCase()}  ${m.id}  hp ${m.hp}  (${m.pos.x}, ${m.pos.y})`
     )
     .join("\n");
-  const legend =
-    `  @  hero  hp ${world.hero.hp}  (${world.hero.pos.x}, ${world.hero.pos.y})\n` +
-    `  X  exit  (${world.exit.x}, ${world.exit.y})\n${monsters}`;
+  const legend = `${units}\n  X  exit  (${world.exit.x}, ${world.exit.y})\n${monsters}`;
   return `${top}\n${body}\n${top}\n${legend}`;
+}
+
+// ── ASCII fog map (the captain's partial knowledge) ─────────────────────────
+/** The glyph for a terrain fact on the captain's map. Unknown cells are blank —
+ *  the whole point is that the captain cannot see them. */
+export function fogGlyph(k: Known): string {
+  switch (k) {
+    case "unknown":
+      return " ";
+    case "floor":
+      return ".";
+    case "wall":
+      return "#";
+    case "exit":
+      return "X";
+    case "conflict":
+      return "!";
+  }
+}
+
+/** Render the captain's FogMap: terrain as known, known monsters by their initial,
+ *  everything else dark. Optional unit overlay draws the pieces by their glyph. The
+ *  contrast with mazeMap(trueWorld) is the demo's closing point — the captain
+ *  reached the exit without ever holding this much less than the whole maze. */
+export function fogMap(
+  fog: FogMap,
+  units: readonly { id: string; pos: { x: number; y: number } }[] = [],
+): string {
+  const glyphAt = (x: number, y: number): string => {
+    const u = units.find((uu) => uu.pos.x === x && uu.pos.y === y);
+    if (u) return unitGlyph(u.id);
+    for (const [id, pos] of Object.entries(fog.monsters)) {
+      if (pos.x === x && pos.y === y) return id[0].toUpperCase();
+    }
+    return fogGlyph(fog.cells[y][x]);
+  };
+  const rows: string[] = [];
+  for (let y = 0; y < fog.height; y++) {
+    let line = "";
+    for (let x = 0; x < fog.width; x++) line += glyphAt(x, y);
+    rows.push(line);
+  }
+  const top = "+" + "-".repeat(fog.width) + "+";
+  const body = rows.map((r) => "|" + r + "|").join("\n");
+  return `${top}\n${body}\n${top}`;
 }

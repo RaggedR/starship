@@ -14,7 +14,7 @@
 
 import type { ModelClient, Turn } from "./model.ts";
 import type { Dir, Pos } from "../maze/types.ts";
-import { DIRS, eq, isWall, monsterAt, solved, step } from "../maze/world.ts";
+import { atExit, DIRS, eq, isWall, monsterAt, requireUnit, step } from "../maze/world.ts";
 import { loadMaze } from "../maze/store.ts";
 
 /** Breadth-first search from the hero to the exit, walls impassable, monsters
@@ -22,7 +22,7 @@ import { loadMaze } from "../maze/store.ts";
  *  shortest path, or null if the hero is already there or no path exists. */
 function firstStep(worldPath: string): { dir: Dir; to: Pos } | null {
   const world = loadMaze(worldPath);
-  const start = world.hero.pos;
+  const start = requireUnit(world, "hero").pos;
   if (eq(start, world.exit)) return null;
 
   const key = (p: Pos) => `${p.x},${p.y}`;
@@ -70,7 +70,7 @@ export function scriptedClient(worldPath: string): ModelClient {
     // deno-lint-ignore require-await
     async converse(): Promise<Turn> {
       const world = loadMaze(worldPath);
-      if (solved(world)) return { text: "Reached the exit.", toolCalls: [] };
+      if (atExit(world, "hero")) return { text: "Reached the exit.", toolCalls: [] };
 
       const next = firstStep(worldPath);
       if (!next) return { text: "No path to the exit.", toolCalls: [] };

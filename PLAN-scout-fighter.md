@@ -2,6 +2,39 @@
 
 **Version 0.1 — 2026-10-30. Author: the instance that built the single-agent maze.**
 
+---
+
+## STATUS: BUILT (2026-10-30) — `deno task fleet`
+
+Milestones 1–6 are done and green (63 tests, `verify.sh` byte-identical on all
+three demos). Robin revised the design verbatim while building; the code follows
+his revisions, not this plan's original §5 defaults:
+
+1. **The captain MOVES to the exit** (plan §2 said "moves nothing itself"). It is a
+   blind piece with registry `{move}`, advancing only on revealed-safe ground. "The
+   captain reaches the exit" is the win condition.
+2. **The scout gets 5 moves per dispatch** (not 2) and ranges autonomously; the
+   round is `seqC(scout, fighter)` precisely because the scout is faster — it goes
+   ahead, retreats, reports, and only then is the fighter sent (decision 3: blind
+   fighter; decision 4: scripted captain; decision 5: static monsters — all taken).
+3. **All three units start stacked** on the entrance, which retired the M2
+   unit-unit collision rule (it would deadlock backtracking in 1-wide corridors);
+   only walls and monsters block now.
+4. **Terrain/occupancy split in the fog** (`src/maze/fog.ts`): terrain is a monotone
+   join (`unknown ⊑ {floor,wall,exit} ⊑ conflict`); monsters live in a separate,
+   revisable dict so a kill doesn't violate monotonicity. `mergeSighting` retracts a
+   monster seen gone.
+5. **Big maze + website**: a 21×15 deterministic perfect maze (path 71, 10 dead
+   ends; `scratchpad/genmaze.ts` generated it, pasted as `seedFleet()` data). The
+   demo writes `moves.txt`, `trace.json`, and a self-contained `index.html` replay
+   (`src/fleet/site.ts`) animating the solve with the captain's fog lifting over the
+   true maze. The captain reaches the exit with 136/315 cells still `unknown`.
+
+Still open (milestone 7, not yet done): a `--live` per-agent model path, and a
+`fleet.tex` writeup paralleling `maze.tex`.
+
+---
+
 This plan is the next step after the maze agent (merged in PR #1). Read it with
 [`maze.pdf`](maze.pdf) open, and [`PLAN.md`](PLAN.md) §9 for where the maze stands.
 
