@@ -30,8 +30,13 @@ his revisions, not this plan's original §5 defaults:
    (`src/fleet/site.ts`) animating the solve with the captain's fog lifting over the
    true maze. The captain reaches the exit with 136/315 cells still `unknown`.
 
-Still open (milestone 7, not yet done): a `--live` per-agent model path, and a
-`fleet.tex` writeup paralleling `maze.tex`.
+Milestone 7 done too: `fleet.tex`/`fleet.pdf` (parallels `maze.tex`), and `--live`
+— the scout's per-step choice is a `ScoutBrain` seam (scripted BFS default, a Groq
+model on `--live` that chooses which branch to explore at junctions). The fighter
+(mechanical) and captain (deterministic orchestrator, decision 4) stay scripted by
+design — the scout is the only agent whose choices a model meaningfully makes. The
+`--live` plumbing is covered by stub-model tests (no key needed); `verify.sh` stays
+byte-identical on the scripted default.
 
 ---
 

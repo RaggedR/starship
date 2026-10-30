@@ -270,8 +270,27 @@ maze with the captain's fog lifting over it as the scout reports come in, the fi
 clearing monsters, and the captain marching out at the end. The website is a pure
 function of the deterministic trace, so it too is byte-identical across runs.
 
+\section{The leaf seam: scripted and model}
+
+The scout's decision at each step sits behind one interface, a \emph{brain}, exactly
+as the single-agent maze puts the whole model behind a \code{ModelClient}. The
+default \code{scriptedScoutBrain} is a breadth-first step toward the nearest frontier
+--- keyless and deterministic, which is what keeps the demo byte-identical. The
+\code{--live} brain hands a free model (Groq's OpenAI-compatible endpoint, reused
+unchanged from the single-agent maze) the one decision where judgement helps: at a
+\emph{junction}, which of several productive directions to explore. In a corridor
+there is a single productive step and the model is not consulted; if the only
+productive step is onto a monster, the loop reports \code{blockedBy} as before; and a
+malformed or off-menu reply falls back to the BFS pick, so a weak model can slow the
+solve but never break it. The fighter is mechanical (it follows the captain's path
+and strikes) and the captain is the deterministic orchestrator, so both stay
+scripted --- the scout is the only agent whose choices a model meaningfully makes. A
+live run uses the real id and clock seams, never the demo's seeded stand-ins: a
+live audit must carry true timestamps.
+
 \bigskip
 \noindent\emph{Run it:} \code{deno task fleet}, then open
-\code{demo-out/fleet/index.html}.
+\code{demo-out/fleet/index.html}. For the model-driven scout,
+\code{GROQ\_API\_KEY=... deno task fleet -{}- -{}-live}.
 
 \end{document}

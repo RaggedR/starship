@@ -81,6 +81,7 @@ amalgamation**, on the sharpest example — partial observability. See
 ```bash
 deno task fleet                      # scripted, deterministic — no API key
 open demo-out/fleet/index.html       # the generated replay website
+GROQ_API_KEY=... deno task fleet -- --live   # a free model makes the scout's choices
 ```
 
 Three typed agents with **disjoint registries** (the permission grant, enforced by
@@ -104,6 +105,12 @@ is literal: the captain is never handed the world object; it reaches the exit wi
 **~43% of the maze still `unknown`** on its map. The run writes `moves.txt`,
 `trace.json`, and a self-contained `index.html` that animates the solve — the true
 maze with the captain's fog lifting over it.
+
+The scout's decision each step is a **brain** seam (like the single-agent maze's
+`ModelClient`): the default is a deterministic BFS; `--live` swaps in a free Groq
+model that chooses which branch to explore at each junction (the one decision where
+judgement helps). The fighter is mechanical and the captain is the deterministic
+orchestrator, so they stay scripted — only the scout gets a model.
 
 ## What the demo shows
 

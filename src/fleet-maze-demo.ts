@@ -27,6 +27,8 @@ import { fileShipLog } from "./log/shiplog.ts";
 import { reconcile, reconSummary } from "./log/reconcile.ts";
 import type { HarnessCtx } from "./bridge/harness.ts";
 import { orchestrateFleet } from "./fleet/fleet-captain.ts";
+import { modelScoutBrain, scriptedScoutBrain } from "./fleet/scout.ts";
+import { groqClient } from "./agent/groq.ts";
 import type { FleetAction } from "./fleet/ops.ts";
 import type { FogMap } from "./maze/fog.ts";
 import { fogGlyph } from "./cli/format.ts";
@@ -42,7 +44,14 @@ function freshDir(path: string): void {
   Deno.mkdirSync(path, { recursive: true });
 }
 
-const live = Deno.args.includes("--live"); // reserved for a later per-agent model
+// --live swaps the scout's BRAIN from the deterministic BFS to a free model that
+// chooses which branch to explore at each junction. The fighter stays mechanical
+// (it only follows the captain's path and strikes) and the captain stays the
+// deterministic orchestrator (PLAN decision 4) — the scout is where judgement helps.
+// On a live run the id/clock seams are the REAL ones (not seeded): a live run's
+// audit must carry true timestamps, never the demo's fixed stand-ins (starship PR #1).
+const live = Deno.args.includes("--live");
+const scoutBrain = live ? modelScoutBrain(groqClient()) : scriptedScoutBrain();
 
 // ── the rig: the dungeon CLI over files in `dir`, a harness over it ─────────
 const dir = "demo-out/fleet";
@@ -127,6 +136,7 @@ const sink = (a: FleetAction, fog: FogMap) => {
 
 // ══ 1. The captain's blank map ════════════════════════════════════════════
 rule("THE FLEET — a scout, a fighter, and a blind captain");
+p(`  scout brain: ${scoutBrain.name}${live ? " (live model)" : " (scripted, deterministic)"}`);
 p("The captain cannot see the maze. Its whole knowledge starts empty:");
 p("");
 // an all-unknown fog, the same size as the world, with the three units stacked
@@ -146,6 +156,7 @@ const result = await orchestrateFleet({
     start: world0.units.find((u) => u.id === "fighter")!.pos,
     hp: world0.units.find((u) => u.id === "fighter")!.hp,
   },
+  scoutBrain,
   sink,
 });
 

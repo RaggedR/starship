@@ -248,3 +248,44 @@ export function adjacentFreeCell(fog: FogMap, at: Pos): Pos | null {
   }
   return null;
 }
+
+/** Distance from every known cell to the NEAREST frontier, by multi-source BFS out
+ *  from the frontier cells over known-passable ground (monsters passable — their
+ *  terrain is floor). The field a model-driven scout uses to know which steps make
+ *  progress. */
+export function frontierField(fog: FogMap): Map<string, number> {
+  const dist = new Map<string, number>();
+  let q: Pos[] = [];
+  for (const f of frontier(fog)) {
+    dist.set(key(f), 0);
+    q.push(f);
+  }
+  while (q.length) {
+    const next: Pos[] = [];
+    for (const p of q) {
+      const d = dist.get(key(p))!;
+      for (const dir of DIRS) {
+        const n = step(p, dir);
+        if (!knownPassable(fog, n) || dist.has(key(n))) continue;
+        dist.set(key(n), d + 1);
+        next.push(n);
+      }
+    }
+    q = next;
+  }
+  return dist;
+}
+
+/** The directions from `from` that STRICTLY reduce the distance to the nearest
+ *  frontier — the set of productive exploration steps (monster cells included, so a
+ *  blocked way is still offered; the scout loop turns that into a `blockedBy`). A
+ *  model-driven scout chooses among these; a one-element result is forced. */
+export function progressDirections(fog: FogMap, from: Pos): Dir[] {
+  const field = frontierField(fog);
+  const d0 = field.get(key(from));
+  if (d0 === undefined || d0 === 0) return [];
+  return DIRS.filter((dir) => {
+    const n = step(from, dir);
+    return knownPassable(fog, n) && field.get(key(n)) === d0 - 1;
+  });
+}

@@ -40,7 +40,7 @@ import {
   type ScoutReport,
   unitMove,
 } from "./ops.ts";
-import { makeScout } from "./scout.ts";
+import { makeScout, type ScoutBrain, scriptedScoutBrain } from "./scout.ts";
 import { makeFighter } from "./fighter.ts";
 
 export type FleetResult = {
@@ -62,6 +62,7 @@ export function orchestrateFleet(params: {
   captainStart: Pos;
   scout: { speed: number };
   fighter: { start: Pos; hp: number };
+  scoutBrain?: ScoutBrain;
   maxRounds?: number;
   sink?: (a: FleetAction, fog: FogMap) => void;
 }): Promise<FleetResult> {
@@ -88,7 +89,8 @@ export function orchestrateFleet(params: {
     rawSink(a, captainFog);
   };
 
-  const scout = makeScout(ctx, emit, { width, height, speed: params.scout.speed });
+  const brain = params.scoutBrain ?? scriptedScoutBrain();
+  const scout = makeScout(ctx, emit, { width, height, speed: params.scout.speed }, brain);
   const fighter = makeFighter(ctx, emit, { pos: params.fighter.start, hp: params.fighter.hp });
   const round = seqC(scout, fighter);
 
