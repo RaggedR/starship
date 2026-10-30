@@ -1,0 +1,327 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{hyperref}
+
+\setlength{\emergencystretch}{3em}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=teal,
+  pdftitle={The Swarm},
+}
+
+% ---- colours ---------------------------------------------------------
+\definecolor{codebg}{rgb}{0.97,0.97,0.95}
+\definecolor{kw}{rgb}{0.10,0.20,0.65}
+\definecolor{str}{rgb}{0.15,0.45,0.20}
+\definecolor{com}{rgb}{0.45,0.45,0.45}
+\definecolor{rule}{rgb}{0.75,0.75,0.72}
+
+% ---- code listings ---------------------------------------------------
+\lstdefinelanguage{TS}{
+  morekeywords={async,await,function,const,let,var,return,for,of,new,class,
+    interface,type,import,export,from,if,else,try,catch,throw,Promise,void,
+    switch,case,default,readonly,break,while,true,false,null},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]',
+  morestring=[b]`,
+}
+\lstdefinestyle{mono}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kw}\bfseries,
+  stringstyle=\color{str},
+  commentstyle=\color{com}\itshape,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  rulecolor=\color{rule},
+  framesep=6pt,
+  xleftmargin=10pt,
+  xrightmargin=4pt,
+  breaklines=true,
+  aboveskip=1em,
+  belowskip=1em,
+}
+\lstset{style=mono}
+
+% ---- callout box -----------------------------------------------------
+\newtcolorbox{keybox}[1][]{
+  colback=codebg, colframe=rule, boxrule=0.5pt, arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+  fonttitle=\bfseries, title={#1}
+}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{\textbf{The Swarm}\\[4pt]
+  \large An LLM captain commanding many agents under fog of war}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent The scout/fighter fleet proved delegation and amalgamation under partial
+observability, but its captain's choices were \emph{forced}: one scout to the nearest
+frontier, one fighter to the one blocking monster, march when the exit is reachable.
+Nothing was decided, so making that captain a model would have been theatre. The
+\emph{swarm} removes the forcing. Five scouts, two fighters, and a captain explore a
+large branching maze in which the captain faces genuine \emph{allocation under partial
+information}: which scout to send where, which fighter to which newly discovered
+monster, and when to stop exploring and commit. The captain is an LLM. It sits at the
+\emph{orchestration} layer, not the leaf, commanding a real delegation hierarchy in
+which it \emph{cannot} cheat, because every order it gives is decoded against the fog
+it has been told and bounded by the same reason-gate as a leaf. The construction
+sharpens three claims. The amalgamation becomes a true \emph{N-ary} join, and the
+captain's map is well-defined precisely because that join is commutative, associative
+and idempotent. The scheduler is a tick loop whose determinism rests on a fixed agent
+order and serial execution. And the model-as-oracle-behind-a-decoder argument, which
+previously guarded a single leaf, now guards the commander: a hallucinated order is a
+refused position, never an escape hatch. Everything scripted is deterministic ---
+\code{verify.sh} replays it to the same bytes, website included --- and the whole
+thing has been run live against a free model.
+\end{abstract}
+
+\section{The one idea}
+
+A container is a pair $(P, R)$: a set of prompts $P$ and, for each $p$, a type $R\,p$
+of permitted responses. A program is a dependent function $(p : P) \to R\,p$. An
+\emph{open agent} is a morphism of containers: a map $u : P \to Q$ sending a prompt
+down to a sub-prompt (control flows \emph{down}) and a map $f : (p:P) \to T(u\,p) \to
+R\,p$ sending the sub-answer back up (data flows \emph{up}, contravariantly). A
+captain delegating to officers, an interpreter calling a device driver, an LLM calling
+a tool: one construction.
+
+The fleet put a \emph{scout} at one leaf of this hierarchy and asked whether a model
+could make the scout's junction choices. It could. The swarm asks the sharper
+question: can a model sit at the \emph{root} --- the commander that delegates to the
+whole hierarchy --- and still be bound by the type discipline rather than escaping it?
+The answer is the subject of this note. The load-bearing fact is that a model is an
+untyped $\mathrm{String} \to \mathrm{String}$; presenting it as a typed planner
+$\mathrm{plan} : S \to P\,s$ is a \emph{promise}, and the promise is kept by a
+validator. A reply that does not decode throws; it never defaults into a
+checked-looking value.
+
+\section{What the swarm adds over the fleet}
+
+The swarm reuses the fleet's world, fog, pathing, two-layer log and combinators
+wholesale. Four things are new.
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}l X@{}}
+\toprule
+Contention & Five scouts over one fog: the captain must fan them to \emph{different}
+regions. Two fighters over several monsters: it must allocate, and choose which
+monsters are worth a fighter at all.\\
+\midrule
+N-ary join & The captain folds \emph{all five} scout reports into its fog each step.
+The fleet merged one at a time and never exercised associativity; the swarm folds over
+$N$, and the fold is well-defined only because the join's laws hold.\\
+\midrule
+Tick scheduler & The fleet's two-phase round (one scout to completion, then one
+fighter, then march) does not survive contention. A pool of eight agents is advanced
+one tick at a time, and the captain re-plans around whoever has gone idle.\\
+\midrule
+Model at the root & The captain's decision is a seam. The default is a deterministic
+greedy planner; \code{-{}-live} swaps in a model. The decoder and reason-gate that
+guarded the scout now guard the commander.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{The N-ary amalgamation}
+
+The captain's entire state is a \code{FogMap}: a flat semilattice of terrain facts
+($\mathit{unknown} \sqsubseteq \{\mathit{floor},\mathit{wall},\mathit{exit}\}$, with a
+top $\mathit{conflict}$ so the join is total) lifted cellwise, plus a revisable
+dictionary of monster positions. The join \code{mergeFog} is idempotent, commutative,
+associative and monotone --- law-tested in \code{fog\_test.ts}. This is the
+treasury/org-chart ``real algebra'' pole, not a tuple gather.
+
+The fleet merged one scout report at a time, so it only ever used the join as a binary
+operation and never relied on associativity. The swarm gathers five reports in a single
+planning step and folds them all in:
+\[
+  \mathrm{fog}' \;=\; \mathrm{fog} \;\sqcup\; \bigsqcup_{i=1}^{5} \mathrm{fogOf}(r_i),
+\]
+implemented as \code{reports.reduce((f, r) => mergeFog(f, fogOf(r)), base)}.
+Because $\sqcup$ is commutative and associative, the result does not depend on the
+order the reports arrive, and because it is idempotent, re-merging a report is
+harmless. This is not a nicety; it is what \emph{licenses} the scheduler to process the
+scouts in a fixed serial order (next section) without the captain's map depending on
+that order. The order-independence is proven end-to-end on sightings taken off the
+real maze in \code{amalgamate\_test.ts}: folding six reports in natural, reversed and
+shuffled orders yields the identical fog.
+
+A subtlety worth stating: within one tick each scout navigates on the fog
+\emph{snapshotted at the start of the tick} plus its own new sightings --- it does
+\emph{not} see the other scouts' sightings from the same tick. So the five reports are
+genuinely independent (a tensor, $\otimes$, not a product), and the join combines them
+afterward. Kills are applied outside the fold (a monster the fighter clears is
+retracted from the dictionary), keeping the fold itself a pure monotone climb.
+
+\section{The tick scheduler and the determinism contract}
+
+Each agent carries a runtime state --- \code{idle}, \code{exploring},
+\code{travelling}, \code{fighting}, \code{done} --- and, for scouts and fighters, a
+standing order. One tick advances every active agent by its speed, folds the scouts'
+reports into the fog, applies any kills, and --- when there is something to decide ---
+asks the captain to re-plan.
+
+\begin{keybox}[The rule the whole thing rests on]
+Agents are processed in a \textbf{fixed id order} within a tick, and their gated CLI
+calls run \textbf{serially}. \code{tensorC} means ``all five scout reports are owed,''
+not ``executed concurrently.'' A \code{Promise.all} over agents that mutate the shared
+world file would make the move order --- and therefore the audit --- non-reproducible.
+The join's order-independence says the \emph{fog} would be the same; the \emph{log}
+would not. So we serialise.
+\end{keybox}
+
+One planning step reads as $\mathrm{seqC}(\mathrm{tensorC}(\text{scout}_1 \ldots
+\text{scout}_5), \text{dispatch})$: gather all five reports (the serial tensor), fold
+them into the fog (the join), then let the captain choose the fighter dispatches and
+the march (the dependent \code{next}). The captain commands \emph{only idle agents} and
+never reassigns one mid-order, so re-planning can happen as often as we like without
+thrashing a standing order.
+
+\paragraph{Event-gated planning.} Re-planning every tick is cheap for the scripted
+captain but would mean a model call per tick on \code{-{}-live}. The scheduler therefore
+consults the captain only when there is genuinely something to decide. The gate oracle
+is the \emph{greedy} plan itself: if the keyless, deterministic scripted captain finds
+nothing to assign --- no idle scout with an open frontier, no idle fighter with a
+reachable monster, no safe march --- then an idle fighter held in reserve is not an
+event, and the captain is not consulted. This bounds the LLM to a couple of dozen calls
+over a solve rather than a couple of hundred, and it is \emph{byte-identical} for the
+scripted captain: on a skipped tick its plan was empty and changed no move, no log and
+no frame.
+
+\section{The scripted captain}
+
+The default \code{CaptainBrain} is a greedy planner, deterministic and keyless, so
+\code{verify.sh} stays byte-identical. It operates in two modes.
+
+\textbf{Explore.} Fan idle scouts across \emph{open} frontiers --- those reachable
+without a fight, assigned nearest-first so the scouts spread. While open frontier
+remains, spend no fighter: exploring is free. Only when exploration \emph{stalls}
+(every reachable frontier sits behind a monster) dispatch the nearest idle fighter to
+the nearest reachable monster, to reopen the map.
+
+\textbf{Commit.} Once a known-floor corridor to the exit exists, stop exploring and
+clear only the monsters \emph{on that corridor}; ignore every other monster. March the
+instant a monster-free route is known.
+
+The honest limitation is worth stating plainly. From the fog alone, a monster that
+gates the half holding the exit and a monster that gates the decoy half are
+\emph{indistinguishable}: both have unknown cells behind them, because the monster is
+exactly \emph{why} that ground is dark. So the greedy captain cannot pre-judge which
+gate to skip before clearing one --- it must open both, which is precisely what puts
+\emph{both fighters} to work at once. What it \emph{can} do honestly is commit-mode
+prioritisation: once a monster-free route to the exit is known, it leaves every
+off-route monster alone --- the decoy half and the monsters deep in it. Sharper
+judgement --- inferring which gate is the decoy before clearing it, and holding a
+fighter back --- is where a model has room to do better, and room to do worse.
+
+\medskip\noindent
+This is why the shipped maze forks at a central start into two large halves rather
+than running a single corridor. An earlier draft placed the monsters on one linear
+path to the exit; in a perfect maze the route to the second passes through the first,
+so the monsters surfaced strictly one at a time, a single fighter cleared them all, and
+the second fighter never moved --- the allocation the swarm is built to show never
+arose. The fork forces it: two gates at equal shallow depth, discovered together,
+neither distinguishable from fog, so the captain allocates both fighters in one step.
+
+\section{The LLM captain}
+
+\code{modelCaptainBrain} is a second \code{CaptainBrain} behind the same seam; the
+scheduler cannot tell it from the greedy default. It reuses the fleet's model stack ---
+the neutral \code{ModelClient} boundary and the free, OpenAI-compatible Groq backend
+with its 429 backoff --- verbatim.
+
+Each step the captain's fog and roster are serialised into a prompt (an ASCII map with
+the agents, monsters and frontier marked, plus explicit lists of idle agents, known
+monsters and some frontier coordinates), and the model is offered four tools:
+\code{assign\_scout}, \code{dispatch\_fighter}, \code{march}, \code{hold}. The set is
+the permission grant; there is no ``do anything.'' Every item of the reply is then
+\emph{decoded against the real state}:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item a scout id that is not an idle scout --- dropped;
+  \item a target cell that is not reachable known floor --- dropped;
+  \item a fighter id that is not an idle fighter, or a monster id not known-alive ---
+    dropped;
+  \item a \code{march} when no monster-free route is known --- dropped;
+  \item any order with an empty reason --- dropped (the reason-gate, on orders).
+\end{itemize}
+
+An order that does not decode is a refused position, never an escape hatch: the model
+can mis-prioritise, but it cannot name a scout that does not exist, send a unit into the
+dark, or march through a wall.
+
+\paragraph{Anti-stall, not anti-idle.} The fallback is the delicate part. If the greedy
+plan always filled every slot the model left empty, the model could never \emph{choose}
+to leave a fighter in reserve --- its prioritisation would be silently overridden and it
+would behave exactly like greedy. So the rule is: honour the model's valid orders
+as-is, including the choice to leave agents idle; fall back to greedy \emph{only when
+the model's whole plan is unproductive while real work remains}. A mis-prioritising
+model is slower but honoured; a lazy or stuck model can never deadlock the swarm. This
+is the orchestration-layer analogue of the scout's ``off-menu reply $\to$ BFS
+fallback,'' raised one level and with the stakes raised to match.
+
+\section{The two-layer log}
+
+Nothing about the audit changes, which is the point. Every move and attack by all five
+scouts, both fighters and the captain passes the registry allowlist and the reason-gate,
+writes a committed effect to Layer 1 (the ship's log, \emph{what}) and a write-ahead
+intent record to Layer 2 (the intent-log, \emph{why}), joined by a correlation id.
+Reconciliation cross-checks the two: a committed mutation with no logged reason is an
+alarm that must never occur, and a refused mutation is visible only in Layer 2 ---
+information the committed log alone could never show. On \code{-{}-live} the id and clock
+seams are the \emph{real} ones, never the fixed stand-ins: a live audit must carry true
+timestamps, or it is a false record of the very thing reconciliation exists to check.
+
+\section{Live validation}
+
+Run against Groq's \code{openai/gpt-oss-120b}, the LLM captain fanned the five scouts to
+different frontiers --- its own reasons, e.g.\ \emph{``monster blocks potential route to
+exit''} --- and then, in a single planning step, dispatched \code{fighter-1} to one gate
+and \code{fighter-2} to the other: \textbf{both fighters allocated at once}, the decision
+the fork exists to force. It cleared the two gates and the one monster on the exit route,
+left the decoy monsters alone, and reached the exit in \textbf{136 ticks across 18
+planning calls}, with \textbf{493 of 1189 cells never revealed} to it and reconciliation
+clean (\textbf{0 alarms}) over a real audit trail. The model commanded as well as the
+greedy captain here; the claim the construction actually makes is stronger and humbler at
+once: it \emph{could not} command worse than refused.
+
+\section{What is, and is not, decided}
+
+The swarm's thesis is that a language model can run a real delegation hierarchy in which
+the type discipline, not trust, is what bounds it --- and that the bound holds whether
+the model is strong, weak or adversarial, because a bad order is a refused position. That
+is demonstrated. What is \emph{not} claimed is that the model orchestrates \emph{better}
+than the greedy planner; on this maze the two land in the same place, and ``the model
+decides better'' is a separate, harder, model-dependent question the guardrails
+deliberately do not need answered. The honest shape of the result is the same as the
+scout's: a free model can slow a solve or mis-prioritise within it, but it never breaks
+the solve and never escapes the audit.
+
+\end{document}
