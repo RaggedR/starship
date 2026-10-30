@@ -36,7 +36,10 @@ model on `--live` that chooses which branch to explore at junctions). The fighte
 (mechanical) and captain (deterministic orchestrator, decision 4) stay scripted by
 design — the scout is the only agent whose choices a model meaningfully makes. The
 `--live` plumbing is covered by stub-model tests (no key needed); `verify.sh` stays
-byte-identical on the scripted default.
+byte-identical on the scripted default. **Validated live** on Groq
+`openai/gpt-oss-120b`: captain solved in 16 rounds, 136/315 unknown, reconciliation
+clean, the model's own reasons recorded at junctions. The scripted replay is deployed
+to GitHub Pages: <https://raggedr.github.io/starship/>.
 
 ---
 
