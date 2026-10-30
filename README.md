@@ -139,12 +139,15 @@ leaf. See [`swarm.pdf`](swarm.pdf) for the full writeup and
 [`PLAN-swarm.md`](PLAN-swarm.md) for the design.
 
 > **▶ Live replay:** <https://raggedr.github.io/starship/swarm/> — the agents start in
-> the centre; the maze forks into two large halves, each gated by a monster, with the
-> exit hidden behind one. The **LLM captain** (Groq `openai/gpt-oss-120b`), unable to
-> tell from fog which half holds the exit, sends **both fighters at once — one to each
-> gate** — then commits to the exit once it surfaces, its own reasoning shown in the
-> plan strip each step. It marches out having never seen ~41% of the maze. (A live
-> model run.)
+> the centre of a maze (51×35, ~1,785 cells) that forks there into two **different**
+> halves, each gated by a monster at its mouth, with the exit hidden behind one. The
+> **LLM captain** (Groq `openai/gpt-oss-120b`), unable to tell from fog which half holds
+> the exit, sends **a fighter to each gate — both cleared at once** — then commits to the
+> exit once it surfaces, its own reasoning shown in the plan strip each step. It marches
+> out having never seen **~41% of the maze**. (A live model run.) The replay page also
+> has two buttons — **🎲 New random maze** solves a freshly-carved maze with the scripted
+> captain entirely in your browser, and **🧠 Live LLM run** watches the real model solve
+> one live (it calls Groq straight from the page).
 
 ```bash
 deno task swarm                      # scripted greedy captain — no API key, deterministic
@@ -173,30 +176,39 @@ GROQ_API_KEY=... deno task swarm -- --live   # a free model IS the captain
   fills in** (anti-stall, not anti-idle: the model may still choose to leave a fighter
   in reserve — that is prioritisation — it just cannot deadlock the swarm). A weak model
   slows or mis-prioritises; it never breaks and never cheats.
-- **The fork forces the allocation.** A central start splits into two large halves,
-  each gated by a monster a few cells in; both gates sit at the same shallow depth, so
-  a scout meets each at about the same tick. Every reachable frontier then sits behind
-  one gate or the other, so the captain must dispatch **both fighters at once** — one
-  per gate — which is the "which fighter to which monster" decision. (The first maze
-  was a single corridor: its monsters surfaced one at a time, one fighter cleared them
-  all, and the second never moved. A linear corridor cannot force the decision.)
+- **The fork forces the allocation.** A central start splits into two large halves
+  (51×35 grid, ~1,785 cells — ~1.5× the first swarm maze), each gated by a monster at its
+  mouth. The two gates sit on **identical, equal-length necks**, so a scout meets each at
+  the same tick — simultaneity *guaranteed by construction*, not by a lucky carve. Because
+  the whole maze is a tree, each gate seals its **entire** lobe (no way around), so every
+  reachable frontier sits behind one gate or the other and the captain must dispatch
+  **both fighters at once** — one per gate — the "which fighter to which monster" decision.
+  (The first swarm maze found its fork by searching the carve and hoping the halves were
+  balanced; this one builds the symmetry into the necks and carves the two lobes
+  *independently* — **different mazes, not mirror images** — so each half is its own thing
+  to explore while staying indistinguishable under fog.)
 - **Prioritisation is the point.** The exit hides behind only one gate, but from the
   fog the two gates look identical — the monster is *why* the ground behind it is dark.
   So the captain opens both, and the moment a monster-free route to the exit is known it
   **commits and leaves every off-route monster alone** (the decoy half, and the monsters
   deep in it). It reaches the exit having cleared **3 of 5** monsters with **~41% of the
-  maze still `unknown`** on its map.
+  maze still `unknown`** on its map (the scripted solve: 82 ticks, 11 planning steps,
+  733 of 1785 cells never revealed).
 
-**Validated live** against Groq's `openai/gpt-oss-120b`: the LLM captain fanned the
-five scouts to different frontiers, then in a single planning step dispatched
-`fighter-1 → ogre-1` and `fighter-2 → ogre-2` — **both gates at once** — with its own
-reasons in the log (*"monster blocks potential route to exit"*). It cleared the two
-gates plus the one monster on the exit route, ignored the decoy monsters, and reached
-the exit in **136 ticks / 18 planning calls**, with **493 of 1189 cells never
-revealed** and reconciliation clean (**0 alarms**) over a **real** audit trail (true
-timestamps, not the fixed stand-ins — a live run must never be stamped with the demo
-clock). Every order it gave is bounded by the same decoder and reason-gate as the
-leaf: a hallucinated order is a refused position, never an escape hatch.
+**Validated live** against Groq's `openai/gpt-oss-120b` (on the 51×35 maze): the LLM
+captain sent a fighter to each gate the moment its scout was blocked — `fighter-1 → ogre-2`
+(*"Scout blocked at ogre-2, need to clear path"*), then `fighter-2 → ogre-1`
+(*"Scout blocked at ogre-1, need clearance"*) — clearing **both gates
+concurrently** with its own reasons in the log, then cleared the one monster on the exit
+route (*"Scout blocked at guarded monster"*) and ignored the decoy monsters. It
+reached the exit in **124 ticks / 13 planning calls**, with **741 of 1785 cells never
+revealed (~41%)** and reconciliation clean (**2937 matched, 0 alarms**) over a **real**
+audit trail (true timestamps, not the fixed stand-ins — a live run must never be stamped
+with the demo clock). The scripted greedy captain assigns both gates in a *single* plan
+(both scouts block the same tick); the model explored more sequentially and assigned one
+gate per step — the same allocation, reached its own way. Every order it gave is bounded
+by the same decoder and reason-gate as the leaf: a hallucinated order is a refused
+position, never an escape hatch.
 
 ## What the demo shows
 
