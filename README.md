@@ -18,10 +18,11 @@ MacBeth's Note 5, *The toy harness is a worker*
 Requires [Deno](https://deno.com) (2.x).
 
 ```bash
-deno task demo     # the whole showpiece in one run (~1 min to read)
-deno task test     # 24 unit/contract tests
+deno task demo     # the star-system showpiece in one run (~1 min to read)
+deno task maze     # a real agent navigating a maze and fighting monsters
+deno task test     # 41 unit/contract tests
 deno task check    # type-check — the typed gold plug compiling is the point
-./verify.sh        # check + test + prove the demo replays byte-identically
+./verify.sh        # check + test + prove both demos replay byte-identically
 ```
 
 Drive the CLI directly:
@@ -35,6 +36,39 @@ deno task con -- weapons fire --target minefield-A --reason "clear it"   # refus
 
 (State persists to `starship-state.json` and `ships-log.jsonl` in the working
 directory; delete them to reset.)
+
+## The maze — a real agent solving a problem, on a free model
+
+The bridge above is driven by *scripted* officers (deterministic stand-ins for a
+model). The maze is the other half: a genuine agent in the five-part harness loop
+(client · conversation · outer loop · **inner model-call loop** · tool dispatch)
+*solving* something — navigate a grid, fight the monsters blocking the way, reach
+the exit.
+
+```bash
+deno task maze                       # scripted BFS solver — no API key, deterministic
+GROQ_API_KEY=... deno task maze -- --live   # a real, FREE model (Groq) drives the loop
+deno task dungeon -- look            # drive the maze CLI directly
+deno task dungeon -- move --dir E --reason "head east toward the exit"
+```
+
+- **Free model instead of Anthropic.** The whole model surface is one interface,
+  `ModelClient` (`src/agent/model.ts`) — a neutral `ToolCall`/`ToolResult`
+  boundary that keeps the dispatch independent of any model SDK. `src/agent/groq.ts`
+  is the *only* file that knows a wire format: a `fetch` to Groq's free,
+  OpenAI-compatible endpoint (point `GROQ_BASE_URL` at Cerebras, OpenRouter, or a
+  local Ollama to switch, no code change). `src/agent/scripted.ts` is a
+  deterministic BFS solver so the demo and tests run with no key and replay
+  byte-identically.
+- **The agent's only hands are five allowlisted capabilities** — `look`, `hero`,
+  `map`, `move`, `attack`. The allowlist *is* the permission grant; there is no
+  `bash`. `move`/`attack` require a reason, enforced by the same reason-gate as the
+  bridge.
+- **The log is the solution trace.** Every move and attack lands in the ship's log
+  with its reason in the intent-log; reconciliation proves the agent never moved
+  the maze except through a reasoned, logged order. An illegal step (into a wall)
+  is refused and visible only in Layer 2 — a refused move and a wall feel the same
+  from inside.
 
 ## What the demo shows
 
@@ -57,10 +91,12 @@ directory; delete them to reset.)
 | `src/world/` | the deterministic world: `types`, `world` (reducers), `gates` (smart constructors), `seed`, `store` |
 | `src/log/` | `ids` (seeded/real seams), `shiplog` (Layer 1), `intentlog` (Layer 2), `reconcile` |
 | `src/lib/algebra.ts` | the gold container combinators (`sumC/tensorC/productC/seqC`, `Runner`), vendored in-process |
-| `src/cli/` | `con` (the executable) and `format` (json/table + star map) |
+| `src/cli/` | `con` (the star-system executable), `dungeon` (the maze executable), and `format` (json/table + star map + maze map) |
 | `src/bridge/` | `containers` (each officer's typed surface), `officers`, `harness` (registry + reason-gate + intent-log), `captain` |
+| `src/maze/` | the maze world: `types`, `world` (reducers + `look`), `gates` (move/attack smart constructors), `seed`, `store` |
+| `src/agent/` | the agent: `model` (the `ModelClient` seam + tool specs), `groq` (free OpenAI-compatible backend), `scripted` (deterministic BFS), `loop` (the five-part model loop) |
 | `src/fleet/flagship.ts` | nesting — a flagship delegating to ship-captains |
-| `src/demo.ts`, `verify.sh` | the end-to-end demo and its determinism check |
+| `src/demo.ts`, `src/maze-demo.ts`, `verify.sh` | the two end-to-end demos and their determinism checks |
 
 ## Design anchors
 

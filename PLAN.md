@@ -147,6 +147,34 @@ the reconciliation report — all in under a minute, with the same result twice.
 
 ---
 
+## 9. Extension built — the maze agent (a real model loop, free backend)
+
+Milestones 1–6 above drive the bridge with *scripted* officers: deterministic
+answer-functions standing in for a model (`src/bridge/officers.ts`). That proved
+four of the five classic harness parts (client · conversation · outer loop · inner
+model-call loop · tool dispatch) — everything except a **real inner model-call
+loop**. The maze supplies it, and answers "a free model instead of Anthropic".
+
+- **A new domain, same spine.** `src/maze/` mirrors `src/world/` (types, reducers,
+  smart-constructor gates, seed, store); `src/cli/dungeon.ts` is a second conn with
+  the same `commit()` gate as `con.ts`. Reads are `look`/`hero`/`map`; mutations are
+  `move --dir` and `attack --target`, reason-required and gated. The two-layer log,
+  reconcile, and the deterministic seams are reused unchanged.
+- **The model seam.** `src/agent/model.ts` is the neutral `ModelClient` +
+  `ToolCall`/`ToolResult` boundary that keeps the dispatch independent of any
+  model SDK. `src/agent/groq.ts` (a `fetch` to Groq's free, OpenAI-compatible
+  endpoint) is the *only* file that knows a wire format; `src/agent/scripted.ts` is
+  a deterministic BFS solver for the keyless, byte-identical demo and tests.
+- **The loop.** `src/agent/loop.ts` is the missing part: it calls the `ModelClient`,
+  services each tool call through the existing reason-gate, and repeats until the
+  agent reaches the exit, dies, or hits the step budget. The agent's only hands are
+  the five allowlisted capabilities — no `bash`.
+- **Done, as a showpiece.** `deno task maze` shows the agent perceive→reason→act to
+  the exit, fighting the monsters on the way; the ship's log + intent-log together
+  are the solution trace; an illegal step is refused and visible only in Layer 2;
+  reconciliation is clean. `--live` swaps the scripted solver for the free model
+  with no other change.
+
 ## Cross-references
 
 - Theory and SDK — `~/git/harness/` (start at `harness-engineering/start-here.tex`;
