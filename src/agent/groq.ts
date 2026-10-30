@@ -84,18 +84,28 @@ function parseToolCalls(raw: OpenAIToolCall[] | undefined): ToolCall[] {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** How long to wait before a retry. Honour the Retry-After header first, then the
- *  "try again in 15.03s" that Groq puts in the 429 body, else a linear backoff.
- *  Capped so a pathological value cannot hang the run. */
+/** How long to wait before a retry, in milliseconds. Prefer the server's own
+ *  instruction: a Retry-After header, either as seconds or as an HTTP date; then
+ *  the "try again in 15.03s" that Groq puts in the 429 body; else a linear
+ *  backoff. The server's figure is honoured in full (a too-short wait just hits
+ *  the same limit again); a 2-minute cap guards only against a pathological value. */
 function retryDelayMs(resp: Response, body: string, attempt: number): number {
-  const header = Number(resp.headers.get("retry-after"));
-  const fromBody = body.match(/try again in ([\d.]+)s/);
-  const seconds = Number.isFinite(header) && header > 0
-    ? header
-    : fromBody
-    ? Number(fromBody[1])
-    : 2 * attempt;
-  return Math.min(seconds + 0.5, 30) * 1000;
+  let seconds: number | null = null;
+  const header = resp.headers.get("retry-after");
+  if (header) {
+    const asNum = Number(header);
+    if (Number.isFinite(asNum) && asNum >= 0) {
+      seconds = asNum;
+    } else {
+      const asDate = Date.parse(header); // Retry-After may be an HTTP date
+      if (Number.isFinite(asDate)) seconds = Math.max(0, (asDate - Date.now()) / 1000);
+    }
+  }
+  if (seconds === null) {
+    const fromBody = body.match(/try again in ([\d.]+)s/);
+    seconds = fromBody ? Number(fromBody[1]) : 2 * attempt;
+  }
+  return Math.min(seconds + 0.5, 120) * 1000;
 }
 
 export function groqClient(): ModelClient {

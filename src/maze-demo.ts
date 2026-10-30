@@ -15,7 +15,7 @@ import { mazeMap } from "./cli/format.ts";
 import { run as dungeonRun } from "./cli/dungeon.ts";
 import { loadMaze, saveMaze } from "./maze/store.ts";
 import { seedMaze } from "./maze/seed.ts";
-import { fixedClock, seededIds } from "./log/ids.ts";
+import { fixedClock, realClock, realIds, seededIds } from "./log/ids.ts";
 import { fileIntentLog } from "./log/intentlog.ts";
 import { fileShipLog } from "./log/shiplog.ts";
 import { reconcile, reconSummary } from "./log/reconcile.ts";
@@ -34,29 +34,32 @@ function freshDir(path: string): void {
   Deno.mkdirSync(path, { recursive: true });
 }
 
-/** A rig: the dungeon CLI over files in `dir`, a harness over it, all seams seeded
- *  so the scripted run replays byte-identically (mirrors rig() in demo.ts). */
+const live = Deno.args.includes("--live");
+
+/** A rig: the dungeon CLI over files in `dir`, a harness over it. In the scripted
+ *  demo the id/clock seams are seeded so the run replays byte-identically (mirrors
+ *  rig() in demo.ts). In a `--live` run the model makes the run non-reproducible
+ *  anyway, so the seams are the REAL ones: the audit trail then carries true
+ *  timestamps and unique ids, not the demo's fixed stand-ins. */
 function rig(dir: string) {
   freshDir(dir);
   const wp = `${dir}/maze.json`;
   const lp = `${dir}/dungeon-log.jsonl`;
   const ip = `${dir}/intent-log.jsonl`;
   saveMaze(wp, seedMaze());
-  const conIds = seededIds("dungeon");
-  const conClock = fixedClock();
+  const conIds = live ? realIds() : seededIds("dungeon");
+  const conClock = live ? realClock() : fixedClock();
   const conRun = (argv: string[]) =>
     dungeonRun([...argv, "--world", wp, "--log", lp], conIds, conClock);
   const ctx: HarnessCtx = {
-    ids: seededIds("agent"),
-    clock: fixedClock(),
+    ids: live ? realIds() : seededIds("agent"),
+    clock: live ? realClock() : fixedClock(),
     intentLog: fileIntentLog(ip),
     sessionId: "MAZE",
     conRun,
   };
   return { ctx, wp, lp, ip, conRun };
 }
-
-const live = Deno.args.includes("--live");
 
 // ══ 1. The maze ═══════════════════════════════════════════════════════
 rule("MAZE — an adventurer, two monsters, one exit");

@@ -9,7 +9,7 @@
 // because the only way to make one is through a gate.
 
 import type { Dir, MazeWorld } from "./types.ts";
-import { isWall, monsterAt, step } from "./world.ts";
+import { isWall, manhattan, monsterAt, step } from "./world.ts";
 import type { MazeEffect } from "./world.ts";
 
 export type GateResult =
@@ -45,11 +45,9 @@ export function moveGate(world: MazeWorld, dir: string): GateResult {
 export function attackGate(world: MazeWorld, targetId: string): GateResult {
   const m = world.monsters.find((mm) => mm.id === targetId);
   if (!m) return refused(`no such monster: ${targetId}`);
-  const adjacent = world.monsters.some((mm) =>
-    mm.id === targetId &&
-    Math.abs(mm.pos.x - world.hero.pos.x) + Math.abs(mm.pos.y - world.hero.pos.y) === 1
-  );
-  if (!adjacent) return refused(`${targetId} is not adjacent — move next to it first`);
+  if (manhattan(m.pos, world.hero.pos) !== 1) {
+    return refused(`${targetId} is not adjacent — move next to it first`);
+  }
   const monsterHpAfter = m.hp - world.hero.atk;
   const lethal = monsterHpAfter <= 0;
   // A lethal blow lands before the monster can strike back; a survivor counters.

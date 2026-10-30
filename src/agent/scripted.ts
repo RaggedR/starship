@@ -59,12 +59,12 @@ function firstStep(worldPath: string): { dir: Dir; to: Pos } | null {
   return null;
 }
 
-let counter = 0;
-const nextId = () => `call-${String(counter++).padStart(4, "0")}`;
-
 /** A ModelClient backed by the BFS above. It ignores the conversation and the tool
- *  specs (it already knows the rules) and reads the world file each turn. */
+ *  specs (it already knows the rules) and reads the world file each turn. The
+ *  tool-call id counter is per-client, so two runs in one process do not share it. */
 export function scriptedClient(worldPath: string): ModelClient {
+  let counter = 0;
+  const nextId = () => `call-${String(counter++).padStart(4, "0")}`;
   return {
     name: "scripted-bfs",
     // deno-lint-ignore require-await
